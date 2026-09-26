@@ -5,7 +5,7 @@ String hex2(uint8_t b){char x[3];sprintf(x,"%02X",b);return String(x);}
 String bytesHex(const uint8_t*b,size_t n){String s;for(size_t i=0;i<n;i++){if(i)s+=' ';s+=hex2(b[i]);}return s;}
 bool parseHexString(String s,uint8_t*out,size_t&n,size_t maxn);
 void applyPollGroups();
-String jsonEscape(String s){s.replace("\\","\\\\");s.replace(""","\\"");s.replace("\n","\\n");s.replace("\r","");return s;}
+String jsonEscape(String s){String o;for(size_t i=0;i<s.length();i++){char c=s[i];if(c==92){o+=char(92);o+=char(92);}else if(c==34){o+=char(92);o+=char(34);}else if(c==10){o+=char(92);o+='n';}else if(c!=13)o+=c;}return o;}
 void logx(const String&s){String line="["+String(millis())+"ms] "+s;Serial.println(line);logText+=line+"\n";if(logText.length()>60000)logText.remove(0,15000);}
 void setStatus(const String&s){scannerStatus=s;logx("STATUS: "+s);}
 void waitUntilUs(uint32_t target){while((int32_t)(target-micros())>0){int32_t left=(int32_t)(target-micros());if(left>2000)delayMicroseconds(400);}}
