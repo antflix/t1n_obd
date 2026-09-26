@@ -184,3 +184,6 @@ LiveGroup liveGroups[] = {
 };
 static const int LIVE_GROUP_COUNT = sizeof(liveGroups) / sizeof(liveGroups[0]);
 int pollIndex = 0;
+
+void markSessionLost(const String &why);
+void notePollResult(bool ok);
