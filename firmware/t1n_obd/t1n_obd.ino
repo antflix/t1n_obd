@@ -41,7 +41,7 @@ static const int RX_PIN = 16;
 static const bool TX_DRIVE_LOW_HIGH = true;
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.8.4";
+static const char* FIRMWARE_VERSION = "1.8.5";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
