@@ -41,7 +41,7 @@ static const int RX_PIN = 16;
 static const bool TX_DRIVE_LOW_HIGH = true;
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.6.1";
+static const char* FIRMWARE_VERSION = "1.7.0";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -157,6 +157,7 @@ String lastRxHex = "";
 String lastError = "";
 String dtcText = "No DTC read yet.";
 String logText = "";
+String activityLogText = "";
 
 struct RxEvent { uint32_t us; uint8_t b; };
 static const size_t EVENT_MAX = 1024;
