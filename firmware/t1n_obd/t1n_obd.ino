@@ -41,7 +41,7 @@ static const int RX_PIN = 16;
 static const bool TX_DRIVE_LOW_HIGH = true;
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.7.0";
+static const char* FIRMWARE_VERSION = "1.8.0";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -84,6 +84,12 @@ struct ScannerConfig {
   uint32_t keepaliveIntervalMs = 1800;
   uint8_t keepaliveMissLimit = 3;
   uint32_t pollIntervalMs = 300;
+
+  // K-line relay router. relayModule: 0=Engine, 1=ABS, 2=EGS, 255=unused.
+  uint8_t relayGpio[4] = {25,26,27,32};
+  uint8_t relayObdPin[4] = {7,9,11,15};
+  uint8_t relayModule[4] = {0,1,2,255};
+  bool relayActiveLow = true;
 
   String frameC133 = "C1 33 F1 81 66";
   String frameF7   = "F7";
@@ -146,7 +152,7 @@ void setTxt(ValueState &v,const String &x){v.text=x;v.unit="";v.valid=true;v.upd
 bool stale(const ValueState &v,uint32_t age=3500){return !v.valid || millis()-v.updatedMs>age;}
 String moduleName(ModuleId m){return m==MOD_ENGINE?"Engine / CR2":m==MOD_ABS?"ABS / ABSBR901":"Transmission / EGS52";}
 uint8_t moduleAddr(ModuleId m){return m==MOD_ENGINE?0x12:m==MOD_ABS?0x34:0x20;}
-uint8_t moduleObdPin(ModuleId m){return m==MOD_ENGINE?7:m==MOD_ABS?9:11;}
+uint8_t moduleObdPin(ModuleId m){for(int i=0;i<4;i++)if(cfg.relayModule[i]==(uint8_t)m)return cfg.relayObdPin[i];return m==MOD_ENGINE?7:m==MOD_ABS?9:11;}
 
 uint32_t p3ReadyAtMs = 0;
 uint8_t keepaliveMisses = 0;
