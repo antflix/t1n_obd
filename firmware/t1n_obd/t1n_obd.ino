@@ -128,6 +128,11 @@ uint32_t nextPollMs = 0;
 uint32_t lastGoodTrafficMs = 0;
 
 enum ModuleId : uint8_t { MOD_ENGINE=0, MOD_ABS=1, MOD_EGS=2 };
+bool relayGpioUsable(uint8_t pin);
+void allRelaysOff();
+void initRelayRouting();
+int relayIndexForModule(ModuleId m);
+bool selectRelayForModule(ModuleId m);
 ModuleId activeModule = MOD_ENGINE;
 uint8_t activeEcuAddr = 0x12;
 ModuleId requestedModule = MOD_ENGINE;
