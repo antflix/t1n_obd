@@ -1,4 +1,5 @@
 // ---------------- CR2 active tests ----------------
+String kwpNrcText(uint8_t nrc){switch(nrc){case 0x10:return"General reject";case 0x11:return"Service not supported";case 0x12:return"Sub-function not supported";case 0x21:return"Busy / repeat request";case 0x22:return"Conditions not correct";case 0x31:return"Request out of range";case 0x33:return"Security access denied";case 0x35:return"Invalid key";case 0x36:return"Exceeded attempts";case 0x37:return"Required delay not expired";case 0x78:return"Response pending";default:return"Unknown NRC 0x"+hex2(nrc);}}
 bool cr2TestSend(const uint8_t* payload,size_t plen,String &out){
   if(activeModule!=MOD_ENGINE){out="CR2 tests are only available on Engine / CR2.";return false;}
   if(!diagnosticSession||busy){out="Connect Engine / CR2 first.";return false;}
@@ -6,10 +7,10 @@ bool cr2TestSend(const uint8_t* payload,size_t plen,String &out){
   if(!ok){out="Failed: "+lastError+"\nRAW: "+lastRxHex;return false;}
   const uint8_t*p=nullptr;size_t pn=0;
   if(!responsePayload(r,rn,p,pn)){out="Invalid KWP response.\nRAW: "+bytesHex(r,rn);return false;}
-  if(pn>=3&&p[0]==0x7F){out="Negative response: service "+hex2(p[1])+" NRC "+hex2(p[2])+"\nRAW: "+bytesHex(r,rn);return false;}
+  if(pn>=3&&p[0]==0x7F){out="ECU rejected request\nService 0x"+hex2(p[1])+" · NRC 0x"+hex2(p[2])+" ("+kwpNrcText(p[2])+")\nRAW: "+bytesHex(r,rn);activity("CR2 test rejected: service 0x"+hex2(p[1])+", NRC 0x"+hex2(p[2])+" ("+kwpNrcText(p[2])+")");return false;}
   uint8_t expected=(uint8_t)(payload[0]+0x40);
   if(pn<1||p[0]!=expected){out="Unexpected response. Expected "+hex2(expected)+" as positive service.\nRAW: "+bytesHex(r,rn);return false;}
-  out="Accepted\nRAW: "+bytesHex(r,rn);
+  out="ECU accepted command\nPositive KWP response received. This confirms command acceptance, not physical actuator movement.\nRAW: "+bytesHex(r,rn);activity("CR2 test command accepted by ECU: "+bytesHex(payload,plen));
   return true;
 }
 bool cr2TestSendHex(const String &hex,String &out){
