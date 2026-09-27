@@ -41,7 +41,7 @@ static const int RX_PIN = 16;
 static const bool TX_DRIVE_LOW_HIGH = true;
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.8.1";
+static const char* FIRMWARE_VERSION = "1.8.2";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -87,8 +87,8 @@ struct ScannerConfig {
 
   // K-line relay router. relayModule: 0=Engine, 1=ABS, 2=EGS, 255=unused.
   uint8_t relayGpio[4] = {25,26,27,32};
-  uint8_t relayObdPin[4] = {7,9,11,15};
-  uint8_t relayModule[4] = {0,1,2,255};
+  uint8_t relayObdPin[4] = {15,11,9,7};
+  uint8_t relayModule[4] = {255,2,1,0};
   bool relayActiveLow = true;
 
   String frameC133 = "C1 33 F1 81 66";
