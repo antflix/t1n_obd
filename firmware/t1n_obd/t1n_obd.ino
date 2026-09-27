@@ -41,7 +41,7 @@ static const int RX_PIN = 16;
 static const bool TX_DRIVE_LOW_HIGH = true;
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.8.0";
+static const char* FIRMWARE_VERSION = "1.8.1";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -133,6 +133,8 @@ void allRelaysOff();
 void initRelayRouting();
 int relayIndexForModule(ModuleId m);
 bool selectRelayForModule(ModuleId m);
+String relayDiagnosticsJson();
+bool manualRelayTest(int idx,String &result);
 ModuleId activeModule = MOD_ENGINE;
 uint8_t activeEcuAddr = 0x12;
 ModuleId requestedModule = MOD_ENGINE;
