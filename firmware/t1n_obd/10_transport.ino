@@ -23,8 +23,24 @@ size_t buildKwpFrame(const uint8_t*payload,size_t plen,uint8_t*out,size_t maxn){
 bool validChecksum(const uint8_t*f,size_t n){return n>=5&&checksum8(f,n-1)==f[n-1];}
 bool extractEcuFrame(const uint8_t*raw,size_t rn,uint8_t*frame,size_t&fn,size_t maxn){for(size_t i=0;i+4<rn;i++){uint8_t fmt=raw[i];if((fmt&0xC0)!=0x80)continue;size_t plen=fmt&0x3F,total=plen+4;if(plen==0||i+total>rn||total>maxn)continue;if(raw[i+1]!=cfg.testerAddr||raw[i+2]!=activeEcuAddr)continue;if(!validChecksum(raw+i,total))continue;memcpy(frame,raw+i,total);fn=total;return true;}return false;}
 size_t readRaw(uint8_t*out,size_t maxn,uint32_t firstTimeoutMs,uint32_t quietMs){size_t n=0;uint32_t start=millis(),last=start;bool any=false;while(millis()-start<firstTimeoutMs){while(KL.available()){uint8_t b=(uint8_t)KL.read();if(n<maxn)out[n++]=b;any=true;last=millis();}if(any&&millis()-last>=quietMs)break;web.handleClient();delay(1);}return n;}
+size_t readUntilEcuFrame(uint8_t*out,size_t maxn,uint8_t*frame,size_t&fn,size_t frameMax,uint32_t timeoutMs){
+  size_t n=0; fn=0; uint32_t start=millis();
+  while(millis()-start<timeoutMs){
+    bool gotByte=false;
+    while(KL.available()){
+      uint8_t b=(uint8_t)KL.read();
+      if(n<maxn) out[n++]=b;
+      gotByte=true;
+    }
+    if(n&&extractEcuFrame(out,n,frame,fn,frameMax)) return n;
+    web.handleClient();
+    if(!gotByte) delay(1);
+  }
+  if(n) extractEcuFrame(out,n,frame,fn,frameMax);
+  return n;
+}
 void waitP3Ready(){while((int32_t)(p3ReadyAtMs-millis())>0){web.handleClient();delay(1);}}
-bool sendKwpPayload(const uint8_t*payload,size_t plen,uint8_t*response,size_t&responseLen,uint32_t timeoutMs=0){responseLen=0;if(!cr2Connected&&!diagnosticSession){lastError="Diagnostic link is not open";return false;}if(!payload||plen==0){lastError="Empty KWP payload";return false;}uint8_t tx[80];size_t tn=buildKwpFrame(payload,plen,tx,sizeof(tx));if(!tn){lastError="Could not build KWP frame";return false;}if(!timeoutMs)timeoutMs=cfg.rxFirstTimeoutMs;waitP3Ready();uartOn();flushRx();sendSpacedBytes(tx,tn);uint8_t raw[512];size_t rn=readRaw(raw,sizeof(raw),timeoutMs,cfg.rxQuietMs);lastRxHex=bytesHex(raw,rn);logx(rn?"RX RAW "+lastRxHex:"RX RAW <nothing>");if(!rn||!extractEcuFrame(raw,rn,response,responseLen,256)){lastError=rn?"No valid ECU KWP frame found in RX":"No ECU response";return false;}lastRxHex=bytesHex(response,responseLen);logx("RX ECU "+lastRxHex);lastGoodTrafficMs=millis();uint32_t extra=cfg.p3MinMs>cfg.rxQuietMs?cfg.p3MinMs-cfg.rxQuietMs:0;p3ReadyAtMs=millis()+extra;keepaliveMisses=0;lastError="";return true;}
+bool sendKwpPayload(const uint8_t*payload,size_t plen,uint8_t*response,size_t&responseLen,uint32_t timeoutMs=0){responseLen=0;if(!cr2Connected&&!diagnosticSession){lastError="Diagnostic link is not open";return false;}if(!payload||plen==0){lastError="Empty KWP payload";return false;}uint8_t tx[80];size_t tn=buildKwpFrame(payload,plen,tx,sizeof(tx));if(!tn){lastError="Could not build KWP frame";return false;}if(!timeoutMs)timeoutMs=cfg.rxFirstTimeoutMs;waitP3Ready();uartOn();flushRx();sendSpacedBytes(tx,tn);uint8_t raw[512];size_t rn=readUntilEcuFrame(raw,sizeof(raw),response,responseLen,256,timeoutMs);lastRxHex=bytesHex(raw,rn);logx(rn?"RX RAW "+lastRxHex:"RX RAW <nothing>");if(!rn||!responseLen){lastError=rn?"No valid ECU KWP frame found before timeout (echo/noise only)":"No ECU response";return false;}lastRxHex=bytesHex(response,responseLen);logx("RX ECU "+lastRxHex);lastGoodTrafficMs=millis();p3ReadyAtMs=millis()+cfg.p3MinMs;keepaliveMisses=0;lastError="";return true;}
 bool responsePayload(const uint8_t*frame,size_t fn,const uint8_t*&p,size_t&pn){if(fn<5)return false;pn=frame[0]&0x3F;if(pn+4!=fn)return false;p=frame+3;return true;}
 bool responsePayloadStartsWith(const uint8_t*frame,size_t fn,const String&expectedHex){if(!expectedHex.length())return true;uint8_t exp[64];size_t en=0;if(!parseHexString(expectedHex,exp,en,sizeof(exp)))return false;const uint8_t*p=nullptr;size_t pn=0;if(!responsePayload(frame,fn,p,pn)||pn<en)return false;for(size_t i=0;i<en;i++)if(p[i]!=exp[i])return false;return true;}
 
