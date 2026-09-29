@@ -162,7 +162,7 @@ ValueState egsTemp, egsGear, egsSelector, egsOutputRpm, egsTurbineRpm, egsVehicl
 
 void setNum(ValueState &v,double x,const String &unit,int decimals=1){v.value=x;v.unit=unit;v.text=String(x,decimals);v.valid=true;v.updatedMs=millis();}
 void setTxt(ValueState &v,const String &x){v.text=x;v.unit="";v.valid=true;v.updatedMs=millis();}
-bool stale(const ValueState &v,uint32_t age=3500){return !v.valid || millis()-v.updatedMs>age;}
+bool stale(const ValueState &v,uint32_t age=6000){return !v.valid || millis()-v.updatedMs>age;}
 String moduleName(ModuleId m){return m==MOD_ENGINE?"Engine / CR2":m==MOD_ABS?"ABS / ABSBR901":"Transmission / EGS52";}
 uint8_t moduleAddr(ModuleId m){return m==MOD_ENGINE?0x12:m==MOD_ABS?0x34:0x20;}
 uint8_t moduleObdPin(ModuleId m){for(int i=0;i<4;i++)if(cfg.relayModule[i]==(uint8_t)m)return cfg.relayObdPin[i];return m==MOD_ENGINE?7:m==MOD_ABS?9:11;}
