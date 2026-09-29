@@ -41,7 +41,7 @@ static const int RX_PIN = 16;
 static const bool TX_DRIVE_LOW_HIGH = true;
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.8.9";
+static const char* FIRMWARE_VERSION = "1.9.0";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -108,7 +108,7 @@ struct ScannerConfig {
   String dtcReadPayload = "18 02 00 00";
   String dtcClearPayload = "14 00 00";
   String disconnectPayload = "20";
-  String pollGroups = "10,12,13,18,30";
+  String pollGroups = "10,12,13,18,20,22,28,30";
 } cfg;
 
 // ---------------- Wi-Fi ----------------
@@ -150,7 +150,13 @@ struct ValueState {
   uint32_t updatedMs = 0;
 };
 
-ValueState engRpm, engCoolant, engIntake, engBoost, engRail, engLowFuel, engBattery, engSpeed, engEgr, engBoostDuty, engBoostTarget;
+ValueState engRpm, engSpeed, engLoad, engCoolant, engIntake, engFuelTemp, engOilTemp, engEgtPre, engEgtPost;
+ValueState engMaf, engPedal1, engPedal2, engAtmos, engBattery, engSensor5v1, engSensor5v2, engOilQuality, engOilLevel;
+ValueState engLowFuel, engLowFuelRawV, engLowFuelDiag, engLowFuelMin;
+ValueState engBoost, engBoostTarget, engRail, engRailTarget, engEgr, engBoostDuty, engDrvCurrent, engFuelQty;
+ValueState engCylCorr[5], engCylRpm[5];
+ValueState engIdleTarget, engDiagIdleTarget, engSpeedTarget, engAirMassTarget, engEgrAirMassTarget;
+ValueState engFuelReqADR, engFuelReqFGR, engFuelReqPWG, engFuelReqSync;
 ValueState absWheelFL, absWheelFR, absWheelRL, absWheelRR, absVoltage, absWheelSensorV, absBrakeLamp, absBrakeSwitch, absPump, absOutletFL, absOutletFR;
 ValueState egsTemp, egsGear, egsSelector, egsOutputRpm, egsTurbineRpm, egsVehicleSpeed, egsBattery;
 
@@ -191,9 +197,9 @@ LiveGroup liveGroups[] = {
   {0x12, "Primary sensors", true,  "", ""},
   {0x13, "Additional sensors / low fuel pressure", true, "", ""},
   {0x18, "Actuator duties / rail pressure", true, "", ""},
-  {0x20, "Raw sensor voltages", false, "", ""},
-  {0x22, "Diagnostic-converted sensors", false, "", ""},
-  {0x28, "Cylinder-selective data", false, "", ""},
+  {0x20, "Raw sensor voltages", true, "", ""},
+  {0x22, "Diagnostic-converted sensors", true, "", ""},
+  {0x28, "Cylinder-selective data", true, "", ""},
   {0x30, "Requested / target values", true, "", ""}
 };
 static const int LIVE_GROUP_COUNT = sizeof(liveGroups) / sizeof(liveGroups[0]);
