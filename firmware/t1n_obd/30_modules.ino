@@ -17,6 +17,80 @@ uint8_t absPollIndex=0,egsPollIndex=0;
 void absLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;static const uint8_t groups[]={1,2,3};busy=true;pollABSGroup(groups[absPollIndex++%3]);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
 void egsLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;static const uint8_t groups[]={0x30,0x31,0x34};busy=true;pollEGSGroup(groups[egsPollIndex++%3]);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
 void livePollTick(){if(activeModule==MOD_ENGINE)engineLivePollTick();else if(activeModule==MOD_ABS)absLivePollTick();else egsLivePollTick();}
-String valueJson(const char*id,const char*label,const ValueState&v){return"{\"id\":\""+String(id)+"\",\"label\":\""+String(label)+"\",\"value\":\""+jsonEscape(v.text)+"\",\"unit\":\""+jsonEscape(v.unit)+"\",\"valid\":"+String(v.valid?1:0)+",\"stale\":"+String(stale(v)?1:0)+"}";}
-String sensorsJson(){String s="{\"module\":\""+jsonEscape(moduleName(activeModule))+"\",\"items\":[";bool first=true;auto add=[&](const char*id,const char*label,const ValueState&v){if(!first)s+=",";first=false;s+=valueJson(id,label,v);};if(activeModule==MOD_ENGINE){add("rpm","Engine RPM",engRpm);add("speed","Vehicle speed",engSpeed);add("coolant","Coolant temperature",engCoolant);add("intake","Intake temperature",engIntake);add("boost","Boost pressure",engBoost);add("boostTarget","Boost target",engBoostTarget);add("rail","Rail pressure",engRail);add("lowFuel","Low-side fuel pressure",engLowFuel);add("battery","Battery voltage",engBattery);add("egr","EGR duty",engEgr);add("boostDuty","Boost actuator duty",engBoostDuty);}else if(activeModule==MOD_ABS){add("wheelFL","Front-left wheel",absWheelFL);add("wheelFR","Front-right wheel",absWheelFR);add("wheelRL","Rear-left wheel",absWheelRL);add("wheelRR","Rear-right wheel",absWheelRR);add("voltage","ABS supply voltage",absVoltage);add("wheelSensorV","Wheel-sensor monitor voltage",absWheelSensorV);add("brakeLamp","Brake-light switch",absBrakeLamp);add("brakeSwitch","Brake switch",absBrakeSwitch);add("pump","Pump motor feedback",absPump);add("outletFL","Front-left outlet valve",absOutletFL);add("outletFR","Front-right outlet valve",absOutletFR);}else{add("temp","Transmission temperature",egsTemp);add("gear","Actual gear",egsGear);add("selector","Selector position",egsSelector);add("outputRpm","Output shaft RPM",egsOutputRpm);add("turbineRpm","Turbine RPM",egsTurbineRpm);add("speed","Vehicle speed",egsVehicleSpeed);add("battery","TCM battery voltage",egsBattery);}s+="]}";return s;}
+String engineExpected(const char*id){
+  String k=id;
+  if(k=="rpm"){if(engIdleTarget.valid&&engSpeed.valid&&engSpeed.value<1.0)return"Idle target "+engIdleTarget.text+" rpm · warm idle usually ~680 rpm";return"Warm idle ~680 rpm · operating RPM varies";}
+  if(k=="speed")return"Driving-dependent";
+  if(k=="load")return"0–100% · operating-dependent";
+  if(k=="coolant")return"Warm roughly 80–100 °C · investigate sustained >105 °C";
+  if(k=="intake")return"Cold-soak ≈ ambient · rises with engine-bay heat/boost";
+  if(k=="fuelTemp")return"Cold-soak ≈ ambient · rises while running";
+  if(k=="oilTemp")return"Warm roughly 80–110 °C";
+  if(k=="egtPre"||k=="egtPost")return"Load-dependent · use as a trend/comparison value";
+  if(k=="maf")return"Load/EGR-dependent · sensor span roughly 15–480 kg/h";
+  if(k=="pedal1"){if(engPedal2.valid)return"0–100% · pedal 2 = "+engPedal2.text+"%";return"0–100% · both pedal channels should track";}
+  if(k=="pedal2"){if(engPedal1.valid)return"0–100% · pedal 1 = "+engPedal1.text+"%";return"0–100% · both pedal channels should track";}
+  if(k=="atmos")return"Altitude/weather-dependent · compare with local barometric pressure";
+  if(k=="battery")return engRpm.valid&&engRpm.value>400?"Running roughly 13.2–14.7 V":"Engine off: ~12.6 V full; ≥12.4 V generally healthy";
+  if(k=="sensor5v1"||k=="sensor5v2")return"5 V reference · expected about 4.9–5.1 V";
+  if(k=="oilQuality")return"Raw CBF presentation unresolved · display for correlation only";
+  if(k=="oilLevel")return"Engine-off measurement only · sensor measuring window roughly 40–120 mm";
+  if(k=="lowFuel"){if(engLowFuelMin.valid)return"ECU minimum "+engLowFuelMin.text+" bar · actual should stay ≥ minimum";return"Idle typically ~2.0–2.5 bar · ECU minimum shown separately";}
+  if(k=="lowFuelRaw")return"Pressure-sensor signal roughly 0.5–3.5 V";
+  if(k=="lowFuelDiag"){if(engLowFuel.valid)return"Cross-check actual "+engLowFuel.text+" bar";return"Diagnostic-converted duplicate of low-side pressure";}
+  if(k=="lowFuelMin")return"ECU-calculated minimum · actual low-side pressure should stay above this";
+  if(k=="boost"){if(engBoostTarget.valid){double d=engBoost.value-engBoostTarget.value;return"Target "+engBoostTarget.text+" hPa · Δ "+String(d,0)+" hPa";}return"KOEO ≈ atmospheric · under load compare with boost target";}
+  if(k=="boostTarget")return"ECU target · compare with actual boost";
+  if(k=="rail"){if(engRailTarget.valid){double d=engRail.value-engRailTarget.value;return"Target "+engRailTarget.text+" bar · Δ "+String(d,1)+" bar";}return"Must reach ~200 bar to start · under load compare with target";}
+  if(k=="railTarget")return"ECU target · compare with actual rail pressure";
+  if(k=="egr"||k=="boostDuty")return"0–100% command · operating-condition dependent";
+  if(k=="drvCurrent")return"ECU-controlled · use as a trend/diagnostic value";
+  if(k=="fuelQty")return"Load/RPM-dependent · mm³ per stroke";
+  if(k.startsWith("cylCorr"))return"Should cluster near 0 and near the other cylinders";
+  if(k.startsWith("cylRpm"))return engRpm.valid?"Should stay close to overall "+engRpm.text+" rpm and other cylinders":"Should stay close to overall RPM and other cylinders";
+  if(k=="idleTarget")return"Warm idle target is usually around 680 rpm";
+  if(k=="diagIdleTarget")return"Compare with ECU idle target/actual RPM when active";
+  if(k=="speedTarget")return"ECU target · operating-dependent";
+  if(k=="airMassTarget")return"ECU air-mass target after limiting";
+  if(k=="egrAirMassTarget")return"ECU EGR-control air-mass target";
+  if(k.startsWith("fuelReq"))return"ECU-requested fuel quantity · operating/control-state dependent";
+  return"";
+}
+String engineHealth(const char*id,const ValueState&v){
+  if(!v.valid||stale(v,6000))return"stale";
+  String k=id;
+  if(k=="coolant"){if(v.value>115)return"bad";if(v.value>105)return"warn";return"neutral";}
+  if(k=="oilTemp"){if(v.value>130)return"bad";if(v.value>120)return"warn";return"neutral";}
+  if(k=="battery"&&engRpm.valid&&engRpm.value>400){if(v.value<12.5||v.value>15.2)return"bad";if(v.value<13.2||v.value>14.7)return"warn";return"ok";}
+  if(k=="sensor5v1"||k=="sensor5v2"){if(v.value<4.8||v.value>5.2)return"bad";if(v.value<4.9||v.value>5.1)return"warn";return"ok";}
+  if(k=="lowFuel"&&engLowFuelMin.valid){if(v.value<engLowFuelMin.value)return"bad";return"ok";}
+  return"neutral";
+}
+String valueJson(const char*id,const char*label,const ValueState&v){
+  String expected=activeModule==MOD_ENGINE?engineExpected(id):"";
+  String state=activeModule==MOD_ENGINE?engineHealth(id,v):(stale(v)?"stale":"neutral");
+  return"{\"id\":\""+String(id)+"\",\"label\":\""+String(label)+"\",\"value\":\""+jsonEscape(v.text)+"\",\"unit\":\""+jsonEscape(v.unit)+"\",\"valid\":"+String(v.valid?1:0)+",\"stale\":"+String(stale(v)?1:0)+",\"state\":\""+state+"\",\"expected\":\""+jsonEscape(expected)+"\"}";
+}
+String sensorsJson(){
+  String s="{\"module\":\""+jsonEscape(moduleName(activeModule))+"\",\"items\":[";bool first=true;
+  auto add=[&](const char*id,const char*label,const ValueState&v){if(!first)s+=",";first=false;s+=valueJson(id,label,v);};
+  if(activeModule==MOD_ENGINE){
+    add("rpm","Engine RPM",engRpm);add("speed","Vehicle speed",engSpeed);add("coolant","Coolant temperature",engCoolant);add("oilTemp","Engine oil temperature",engOilTemp);add("battery","Battery voltage",engBattery);add("lowFuel","Low-side fuel pressure",engLowFuel);
+    add("boost","Boost / MAP actual",engBoost);add("boostTarget","Boost target",engBoostTarget);add("rail","Rail pressure actual",engRail);add("railTarget","Rail pressure target",engRailTarget);
+    add("load","Calculated engine load",engLoad);add("intake","Intake-air temperature",engIntake);add("fuelTemp","Fuel temperature",engFuelTemp);add("egtPre","EGT before catalyst",engEgtPre);add("egtPost","EGT after catalyst",engEgtPost);add("maf","Air mass / MAF",engMaf);
+    add("pedal1","Accelerator channel 1",engPedal1);add("pedal2","Accelerator channel 2",engPedal2);add("atmos","Atmospheric pressure",engAtmos);
+    add("sensor5v1","5 V sensor supply 1",engSensor5v1);add("sensor5v2","5 V sensor supply 2",engSensor5v2);add("oilQuality","Oil quality (raw)",engOilQuality);add("oilLevel","Oil level MOK",engOilLevel);
+    add("lowFuelRaw","Low-side pressure sensor voltage",engLowFuelRawV);add("lowFuelDiag","Low-side pressure diagnostic",engLowFuelDiag);add("lowFuelMin","Low-side pressure ECU minimum",engLowFuelMin);
+    add("egr","EGR duty",engEgr);add("boostDuty","Boost actuator duty",engBoostDuty);add("drvCurrent","Pressure-control valve current",engDrvCurrent);add("fuelQty","Momentary fuel quantity",engFuelQty);
+    for(int i=0;i<5;i++){String id="cylCorr"+String(i+1),label="Cylinder "+String(i+1)+" fuel correction";add(id.c_str(),label.c_str(),engCylCorr[i]);}
+    for(int i=0;i<5;i++){String id="cylRpm"+String(i+1),label="Cylinder "+String(i+1)+" selective RPM";add(id.c_str(),label.c_str(),engCylRpm[i]);}
+    add("idleTarget","Idle-speed target",engIdleTarget);add("diagIdleTarget","Diagnostic idle target",engDiagIdleTarget);add("speedTarget","Vehicle-speed target",engSpeedTarget);add("airMassTarget","Air-mass target after limiting",engAirMassTarget);add("egrAirMassTarget","EGR air-mass target",engEgrAirMassTarget);
+    add("fuelReqPWG","Desired fuel quantity PWG",engFuelReqPWG);add("fuelReqFGR","Desired fuel quantity FGR",engFuelReqFGR);add("fuelReqSync","Desired fuel quantity sync",engFuelReqSync);add("fuelReqADR","Desired fuel quantity ADR",engFuelReqADR);
+  }else if(activeModule==MOD_ABS){
+    add("wheelFL","Front-left wheel",absWheelFL);add("wheelFR","Front-right wheel",absWheelFR);add("wheelRL","Rear-left wheel",absWheelRL);add("wheelRR","Rear-right wheel",absWheelRR);add("voltage","ABS supply voltage",absVoltage);add("wheelSensorV","Wheel-sensor monitor voltage",absWheelSensorV);add("brakeLamp","Brake-light switch",absBrakeLamp);add("brakeSwitch","Brake switch",absBrakeSwitch);add("pump","Pump motor feedback",absPump);add("outletFL","Front-left outlet valve",absOutletFL);add("outletFR","Front-right outlet valve",absOutletFR);
+  }else{
+    add("temp","Transmission temperature",egsTemp);add("gear","Actual gear",egsGear);add("selector","Selector position",egsSelector);add("outputRpm","Output shaft RPM",egsOutputRpm);add("turbineRpm","Turbine RPM",egsTurbineRpm);add("speed","Vehicle speed",egsVehicleSpeed);add("battery","TCM battery voltage",egsBattery);
+  }
+  s+="]}";return s;
+}
 String moduleStatusJson(){String s="{";s+="\"firmware\":\""+String(FIRMWARE_VERSION)+"\",";s+="\"module\":\""+jsonEscape(moduleName(activeModule))+"\",";s+="\"moduleId\":"+String((int)activeModule)+",";s+="\"address\":\"0x"+hex2(activeEcuAddr)+"\",";s+="\"obdPin\":"+String(moduleObdPin(activeModule))+",";int ri=relayIndexForModule(activeModule);s+="\"relay\":"+String(ri>=0?ri+1:0)+",";s+="\"relayGpio\":"+String(ri>=0?cfg.relayGpio[ri]:255)+",";s+="\"connected\":"+String(diagnosticSession?1:0)+",";s+="\"polling\":"+String(livePolling?1:0)+",";s+="\"busy\":"+String(busy?1:0)+",";s+="\"status\":\""+jsonEscape(scannerStatus)+"\",";s+="\"error\":\""+jsonEscape(lastError)+"\",";s+="\"wifi\":\""+jsonEscape(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():WiFi.softAPIP().toString())+"\"";s+="}";return s;}
