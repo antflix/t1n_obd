@@ -44,7 +44,7 @@ bool pollEGSGroup(uint8_t group){uint8_t payload[2]={0x21,group},r[256];size_t r
 }
 uint8_t absPollIndex=0,egsPollIndex=0;
 void absLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;busy=true;pollABSGroup(1);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
-void egsLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;static const uint8_t groups[]={0x30,0x31,0x33,0x34,0x30,0x31,0x32,0x54,0x30,0x31,0x33,0x34,0x40};busy=true;pollEGSGroup(groups[egsPollIndex++%(sizeof(groups)/sizeof(groups[0]))]);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
+void egsLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;/* AP200 transmission_recording.sr verified these five live-data groups. 21 40/54 remain decodable but are not in the default cycle because Autel did not request them during the complete live-data walkthrough. */static const uint8_t groups[]={0x30,0x31,0x33,0x34,0x30,0x31,0x32};busy=true;pollEGSGroup(groups[egsPollIndex++%(sizeof(groups)/sizeof(groups[0]))]);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
 void livePollTick(){if(activeModule==MOD_ENGINE)engineLivePollTick();else if(activeModule==MOD_ABS)absLivePollTick();else egsLivePollTick();}
 String engineExpected(const char*id){
   String k=id;
