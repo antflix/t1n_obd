@@ -175,6 +175,9 @@ String lastTxHex = "";
 String lastRxHex = "";
 String lastError = "";
 String dtcText = "No DTC read yet.";
+String egsVariantId = "";
+String egsVariantRaw = "";
+String egsIdentRaw = "";
 String logText = "";
 String activityLogText = "";
 
