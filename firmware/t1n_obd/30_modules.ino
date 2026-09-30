@@ -44,7 +44,7 @@ bool pollEGSGroup(uint8_t group){uint8_t payload[2]={0x21,group},r[256];size_t r
 }
 uint8_t absPollIndex=0,egsPollIndex=0;
 void absLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;busy=true;pollABSGroup(1);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
-void egsLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;static const uint8_t groups[]={0x30,0x31,0x33,0x34,0x32,0x54,0x40};busy=true;pollEGSGroup(groups[egsPollIndex++%7]);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
+void egsLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;static const uint8_t groups[]={0x30,0x31,0x33,0x34,0x30,0x31,0x32,0x54,0x30,0x31,0x33,0x34,0x40};busy=true;pollEGSGroup(groups[egsPollIndex++%(sizeof(groups)/sizeof(groups[0]))]);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
 void livePollTick(){if(activeModule==MOD_ENGINE)engineLivePollTick();else if(activeModule==MOD_ABS)absLivePollTick();else egsLivePollTick();}
 String engineExpected(const char*id){
   String k=id;
@@ -118,7 +118,14 @@ String sensorsJson(){
   }else if(activeModule==MOD_ABS){
     add("wheelFL","Front-left wheel",absWheelFL);add("wheelFR","Front-right wheel",absWheelFR);add("wheelRL","Rear-left wheel",absWheelRL);add("wheelRR","Rear-right wheel",absWheelRR);add("voltage","ABS supply voltage",absVoltage);add("wheelSensorV","Wheel-sensor monitor voltage",absWheelSensorV);add("brakeLamp","Brake-light switch",absBrakeLamp);add("brakeSwitch","Brake switch",absBrakeSwitch);add("pump","Pump motor feedback",absPump);add("outletFL","Front-left outlet valve",absOutletFL);add("outletFR","Front-right outlet valve",absOutletFR);
   }else{
-    add("temp","Transmission temperature",egsTemp);add("gear","Actual gear",egsGear);add("selector","Selector position",egsSelector);add("outputRpm","Output shaft RPM",egsOutputRpm);add("turbineRpm","Turbine RPM",egsTurbineRpm);add("speed","Vehicle speed",egsVehicleSpeed);add("battery","TCM battery voltage",egsBattery);
+    add("temp","Transmission temperature",egsTemp);add("gear","Actual gear",egsGear);add("targetGear","Target gear",egsTargetGear);add("recognizedGear","Recognized gear",egsRecognizedGear);add("selector","Selector position",egsSelector);add("program","Drive program",egsProgram);add("converterStatus","Converter clutch status",egsConverterStatus);
+    add("outputRpm","Output shaft RPM",egsOutputRpm);add("turbineRpm","Turbine RPM",egsTurbineRpm);add("n2","Transmission speed n2",egsN2Rpm);add("n3","Transmission speed n3",egsN3Rpm);add("engineRpm","Engine RPM received by EGS",egsEngineRpm);
+    add("wheelFL","Front-left wheel RPM",egsWheelFLRpm);add("wheelFR","Front-right wheel RPM",egsWheelFRRpm);add("wheelRL","Rear-left wheel RPM",egsWheelRLRpm);add("wheelRR","Rear-right wheel RPM",egsWheelRRRpm);add("speed","Rear-wheel vehicle speed",egsVehicleSpeed);add("frontSpeed","Front-wheel vehicle speed",egsFrontSpeed);
+    add("battery","TCM battery voltage",egsBattery);add("askSupply","ASK sensor supply",egsAskSupply);add("sensorSupply","Transmission sensor supply",egsSensorSupply);add("valveSupply","Valve supply",egsValveSupply);
+    add("converterSlip","Converter slip actual",egsConverterSlip);add("converterTargetSlip","Converter slip target",egsConverterTargetSlip);add("converterPressure","Converter commanded pressure",egsConverterPressure);add("engineTorque","Engine torque",egsEngineTorque);add("convertedTorque","Converted engine torque",egsConvertedTorque);
+    add("shiftPressure","Shift pressure",egsShiftPressure);add("modPressure","Modulating pressure",egsModPressure);add("shiftCurrentTarget","Shift regulator target current",egsShiftCurrentTarget);add("shiftCurrentActual","Shift regulator actual current",egsShiftCurrentActual);add("modCurrentTarget","Modulating regulator target current",egsModCurrentTarget);add("modCurrentActual","Modulating regulator actual current",egsModCurrentActual);add("tccDuty","Converter clutch PWM raw",egsTccDuty);
+    add("pedal","Pedal value received by EGS",egsPedal);add("grade","Calculated grade",egsGrade);add("minGear","Minimum permitted gear",egsMinGear);add("maxGear","Maximum permitted gear",egsMaxGear);add("coolant","Coolant temperature received by EGS",egsCoolant);add("odometer","Odometer",egsOdometer);
+    add("kickdown","Kickdown",egsKickdown);add("limp","Limp mode",egsLimp);add("currentFault","Current fault flag",egsCurrentFault);add("upshift","Upshift in progress",egsUpshift);add("downshift","Downshift in progress",egsDownshift);add("tccActive","Converter clutch active",egsTccActive);
   }
   s+="]}";return s;
 }
