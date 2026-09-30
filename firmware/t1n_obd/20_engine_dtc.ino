@@ -103,9 +103,9 @@ String decodeEgsEnvironment(const uint8_t*p,size_t pn){
   auto addFrame=[&](const char*name,size_t tOff,size_t kmOff,size_t battOff,size_t tempOff,size_t gearOff,size_t outOff,size_t turbOff,size_t selOff,size_t extraOff){
     s+="  "+String(name)+":\n";
     s+="    Time after reset: "+String(be16(p+tOff))+" s\n";
-    uint16_t kmRaw=be16(p+kmOff);s+="    Odometer: "+String(kmRaw==0xFFFF?"undefined":String((uint32_t)kmRaw*2)+" km")+"\n";
+    uint16_t kmRaw=be16(p+kmOff);if(kmRaw==0xFFFF)s+="    Odometer: undefined\n";else{uint32_t km=(uint32_t)kmRaw*2;s+="    Odometer: "+String(km)+" km / "+String(km*0.621371,0)+" mi\n";}
     s+="    Battery: "+String(p[battOff]==0xFF?"undefined":String(p[battOff]*0.1,1)+" V")+"\n";
-    s+="    Transmission temp: "+String(p[tempOff]==0xFF?"undefined":String((int)p[tempOff]-50)+" C")+"\n";
+    if(p[tempOff]==0xFF)s+="    Transmission temp: undefined\n";else{double tc=(int)p[tempOff]-50;s+="    Transmission temp: "+String(tc,0)+" C / "+String(tc*9.0/5.0+32.0,0)+" F\n";}
     s+="    Gear actual / target: "+egsEnvActualGear(p[gearOff])+" / "+egsEnvTargetGear(p[gearOff])+"\n";
     uint16_t outRaw=be16(p+outOff);s+="    Output RPM: "+String(outRaw==0xFFFF?"undefined":String(outRaw))+"\n";
     s+="    Turbine RPM: "+String(p[turbOff]==0xFF?"undefined":String((uint32_t)p[turbOff]*30))+"\n";
@@ -138,7 +138,7 @@ bool readDTCs(){
   if(payload[0]!=0x18){dtcText="Positive response received, but built-in DTC parser only decodes service 18.\nRAW: "+bytesHex(r,rn);return true;}
   if(pn<2){dtcText="Service 18 response too short.\nRAW: "+bytesHex(r,rn);return false;}
   uint8_t count=p[1];String out="Reported DTC count: "+String(count)+"\n";size_t pos=2;int parsed=0;uint16_t codes[32];uint8_t statuses[32];int stored=0;
-  while(pos+2<pn&&parsed<count&&stored<32){uint16_t code=((uint16_t)p[pos]<<8)|p[pos+1];uint8_t status=p[pos+2];codes[stored]=code;statuses[stored]=status;stored++;String desc=activeModule==MOD_EGS?egsKnownDtcDescription(code):"";out+=dtcCodeString(code)+"  raw="+hex2(p[pos])+hex2(p[pos+1])+"  status="+hex2(status)+"  "+dtcStatusText(status);if(desc.length())out+="\n  "+desc;out+="\n";pos+=3;parsed++;}
+  while(pos+2<pn&&parsed<count&&stored<32){uint16_t code=((uint16_t)p[pos]<<8)|p[pos+1];uint8_t status=p[pos+2];codes[stored]=code;statuses[stored]=status;stored++;String desc=activeModule==MOD_EGS?egsKnownDtcDescription(code):"";out+=dtcCodeString(code)+"  raw="+hex2(p[pos])+hex2(p[pos+1])+"  status="+hex2(status);if(activeModule!=MOD_EGS)out+="  "+dtcStatusText(status);else out+="  (raw EGS status; bit meaning not yet source-validated)";if(desc.length())out+="\n  "+desc;out+="\n";pos+=3;parsed++;}
   if(count==0)out+="No stored DTCs reported.\n";
   out+="Summary RAW: "+bytesHex(r,rn)+"\n";
   if(activeModule==MOD_EGS&&stored){out+="\n=== EGS52 environment records (AP200 service 17) ===\n";for(int i=0;i<stored;i++){out+="\n"+dtcCodeString(codes[i])+" status="+hex2(statuses[i])+"\n";readEgsDtcEnvironment(codes[i],out);}}
