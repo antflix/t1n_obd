@@ -88,7 +88,62 @@ void engineLivePollTick(){if(!livePolling||!diagnosticSession||busy)return;if((i
 
 String dtcCodeString(uint16_t raw){const char kinds[4]={'P','C','B','U'};char out[7];char kind=kinds[(raw>>14)&3];uint8_t d1=(raw>>12)&3;uint16_t rest=raw&0x0FFF;sprintf(out,"%c%1X%03X",kind,d1,rest);return String(out);}
 String dtcStatusText(uint8_t s){uint8_t storage=(s>>5)&3;String st;if(storage==0)st="not detected";else if(storage==1)st="stored / not currently present";else if(storage==2)st="pending/implementation-specific";else st="active/stored";st+=(s&0x10)?", test incomplete":", test complete";if(s&0x80)st+=", warning requested";return st;}
-bool readDTCs(){if(activeModule==MOD_ABS){dtcText="ABS DTC definitions are loaded, but the ABSBR901 CBF did not expose a verified fault-read request. No unverified command will be sent.";return false;}if(!diagnosticSession){dtcText="Not connected.";return false;}uint8_t payload[64];size_t plen=0;if(!parseHexString(cfg.dtcReadPayload,payload,plen,sizeof(payload))){dtcText="Invalid DTC read payload setting.";return false;}uint8_t r[256];size_t rn=0;busy=true;bool ok=sendKwpPayload(payload,plen,r,rn,900);busy=false;if(!ok){dtcText="DTC read failed: "+lastError+"\nRAW: "+lastRxHex;return false;}const uint8_t*p=nullptr;size_t pn=0;if(!responsePayload(r,rn,p,pn)){dtcText="Invalid KWP DTC response.";return false;}if(pn>=3&&p[0]==0x7F){dtcText="ECU negative response to service "+hex2(p[1])+": NRC "+hex2(p[2])+"\nRAW: "+bytesHex(r,rn);return false;}uint8_t expected=(uint8_t)(payload[0]+0x40);if(pn<1||p[0]!=expected){dtcText="Unexpected DTC response. Expected positive service "+hex2(expected)+".\nRAW: "+bytesHex(r,rn);return false;}if(payload[0]!=0x18){dtcText="Positive response received, but built-in DTC parser only decodes service 18.\nRAW: "+bytesHex(r,rn);return true;}if(pn<2){dtcText="Service 18 response too short.\nRAW: "+bytesHex(r,rn);return false;}uint8_t count=p[1];String out="Reported DTC count: "+String(count)+"\n";size_t pos=2;int parsed=0;while(pos+2<pn&&parsed<count){uint16_t code=((uint16_t)p[pos]<<8)|p[pos+1];uint8_t status=p[pos+2];out+=dtcCodeString(code)+"  raw="+hex2(p[pos])+hex2(p[pos+1])+"  status="+hex2(status)+"  "+dtcStatusText(status)+"\n";pos+=3;parsed++;}if(count==0)out+="No stored DTCs reported.\n";out+="RAW: "+bytesHex(r,rn);dtcText=out;return true;}
+String egsKnownDtcDescription(uint16_t code){switch(code){case 0x2600:return"Terminal 87 supply voltage undervoltage";case 0x2316:return"CAN communication with A/C disturbed";case 0x2315:return"CAN communication with instrument cluster disturbed";default:return"";}}
+String egsEnvActualGear(uint8_t x){switch(x&0x0F){case 0:return"N";case 1:return"1";case 2:return"2";case 3:return"3";case 4:return"4";case 5:return"5";case 11:return"R";case 12:return"R2";case 13:return"P";case 14:return"Free";case 15:return"Implausible";default:return"Raw "+String(x&0x0F);}}
+String egsEnvTargetGear(uint8_t x){switch(x&0xF0){case 0x00:return"N";case 0x10:return"1";case 0x20:return"2";case 0x30:return"3";case 0x40:return"4";case 0x50:return"5";case 0xB0:return"R";case 0xC0:return"R2";case 0xD0:return"P";case 0xE0:return"Shift abort";case 0xF0:return"Implausible";default:return"Raw 0x"+hex2(x&0xF0);}}
+String egsEnvSelector(uint8_t x){switch(x){case 0:return"N/A";case 1:return"1";case 2:return"2";case 3:return"3";case 4:return"4";case 5:return"D";case 6:return"N";case 7:return"R";case 8:return"P";case 9:return"+";case 10:return"-";case 11:return"N-D";case 12:return"R-N";case 13:return"P-R";case 15:return"Implausible";default:return"Raw "+String(x);}}
+String decodeEgsEnvironment(const uint8_t*p,size_t pn){
+  if(!p||pn<5||p[0]!=0x57||p[1]!=0x01)return"Environment response format not recognized.\n";
+  String s="Freeze-frame / environment data:\n";
+  if(pn<50){s+="  Response is shorter than the 50-byte EGS52 environment layout.\n";return s;}
+  uint8_t flags=p[6];
+  s+="  Symptom ID: "+String(p[5])+"\n";
+  s+="  Error flags: 0x"+hex2(flags)+" · "+String((flags&0x20)?"detected since init":"restored/not newly detected")+" · "+String((flags&0x10)?"reaction active":"reaction inactive")+" · "+String((flags&0x01)?"checked":"not checked")+" · "+String((flags&0x40)?"static":"sporadic")+"\n";
+  s+="  Error counter: "+String(p[7])+" · warm-up counter: "+String(p[8])+" · drive-cycle counter: "+String(p[9])+"\n";
+  auto addFrame=[&](const char*name,size_t tOff,size_t kmOff,size_t battOff,size_t tempOff,size_t gearOff,size_t outOff,size_t turbOff,size_t selOff,size_t extraOff){
+    s+="  "+String(name)+":\n";
+    s+="    Time after reset: "+String(be16(p+tOff))+" s\n";
+    uint16_t kmRaw=be16(p+kmOff);s+="    Odometer: "+String(kmRaw==0xFFFF?"undefined":String((uint32_t)kmRaw*2)+" km")+"\n";
+    s+="    Battery: "+String(p[battOff]==0xFF?"undefined":String(p[battOff]*0.1,1)+" V")+"\n";
+    s+="    Transmission temp: "+String(p[tempOff]==0xFF?"undefined":String((int)p[tempOff]-50)+" C")+"\n";
+    s+="    Gear actual / target: "+egsEnvActualGear(p[gearOff])+" / "+egsEnvTargetGear(p[gearOff])+"\n";
+    uint16_t outRaw=be16(p+outOff);s+="    Output RPM: "+String(outRaw==0xFFFF?"undefined":String(outRaw))+"\n";
+    s+="    Turbine RPM: "+String(p[turbOff]==0xFF?"undefined":String((uint32_t)p[turbOff]*30))+"\n";
+    s+="    Selector: "+egsEnvSelector(p[selOff])+"\n";
+    s+="    Extra info: "+bytesHex(p+extraOff,6)+"\n";
+  };
+  addFrame("First occurrence",13,15,17,18,19,20,22,23,25);
+  uint8_t history=p[49];s+="  History pointer: "+String(history)+(history==0?" (only first freeze frame valid)":history==1?" (first and last freeze frames valid)":"")+"\n";
+  if(history!=0)addFrame("Last occurrence",31,33,35,36,37,38,40,41,43);
+  return s;
+}
+bool readEgsDtcEnvironment(uint16_t code,String&out){
+  uint8_t req[3]={0x17,(uint8_t)(code>>8),(uint8_t)code},r[256];size_t rn=0;busy=true;bool ok=sendKwpPayload(req,sizeof(req),r,rn,1000);busy=false;
+  if(!ok){out+="  Environment read failed: "+lastError+"\n";return false;}
+  const uint8_t*p=nullptr;size_t pn=0;if(!responsePayload(r,rn,p,pn)){out+="  Environment response invalid.\n";return false;}
+  if(pn>=3&&p[0]==0x7F){out+="  Environment negative response: NRC "+hex2(p[2])+"\n";return false;}
+  if(pn<5||p[0]!=0x57||p[1]!=0x01||p[2]!=(uint8_t)(code>>8)||p[3]!=(uint8_t)code){out+="  Unexpected environment response: "+bytesHex(r,rn)+"\n";return false;}
+  out+=decodeEgsEnvironment(p,pn);return true;
+}
+bool readDTCs(){
+  if(activeModule==MOD_ABS){dtcText="ABS DTC definitions are loaded, but the ABSBR901 CBF did not expose a verified fault-read request. No unverified command will be sent.";return false;}
+  if(!diagnosticSession){dtcText="Not connected.";return false;}
+  uint8_t payload[64];size_t plen=0;
+  if(activeModule==MOD_EGS){payload[0]=0x18;payload[1]=0x02;payload[2]=0xFF;payload[3]=0x00;plen=4;logx("EGS DTC summary request from AP200 capture: 18 02 FF 00");}
+  else if(!parseHexString(cfg.dtcReadPayload,payload,plen,sizeof(payload))){dtcText="Invalid DTC read payload setting.";return false;}
+  uint8_t r[256];size_t rn=0;busy=true;bool ok=sendKwpPayload(payload,plen,r,rn,900);busy=false;if(!ok){dtcText="DTC read failed: "+lastError+"\nRAW: "+lastRxHex;return false;}
+  const uint8_t*p=nullptr;size_t pn=0;if(!responsePayload(r,rn,p,pn)){dtcText="Invalid KWP DTC response.";return false;}
+  if(pn>=3&&p[0]==0x7F){dtcText="ECU negative response to service "+hex2(p[1])+": NRC "+hex2(p[2])+"\nRAW: "+bytesHex(r,rn);return false;}
+  uint8_t expected=(uint8_t)(payload[0]+0x40);if(pn<1||p[0]!=expected){dtcText="Unexpected DTC response. Expected positive service "+hex2(expected)+".\nRAW: "+bytesHex(r,rn);return false;}
+  if(payload[0]!=0x18){dtcText="Positive response received, but built-in DTC parser only decodes service 18.\nRAW: "+bytesHex(r,rn);return true;}
+  if(pn<2){dtcText="Service 18 response too short.\nRAW: "+bytesHex(r,rn);return false;}
+  uint8_t count=p[1];String out="Reported DTC count: "+String(count)+"\n";size_t pos=2;int parsed=0;uint16_t codes[32];uint8_t statuses[32];int stored=0;
+  while(pos+2<pn&&parsed<count&&stored<32){uint16_t code=((uint16_t)p[pos]<<8)|p[pos+1];uint8_t status=p[pos+2];codes[stored]=code;statuses[stored]=status;stored++;String desc=activeModule==MOD_EGS?egsKnownDtcDescription(code):"";out+=dtcCodeString(code)+"  raw="+hex2(p[pos])+hex2(p[pos+1])+"  status="+hex2(status)+"  "+dtcStatusText(status);if(desc.length())out+="\n  "+desc;out+="\n";pos+=3;parsed++;}
+  if(count==0)out+="No stored DTCs reported.\n";
+  out+="Summary RAW: "+bytesHex(r,rn)+"\n";
+  if(activeModule==MOD_EGS&&stored){out+="\n=== EGS52 environment records (AP200 service 17) ===\n";for(int i=0;i<stored;i++){out+="\n"+dtcCodeString(codes[i])+" status="+hex2(statuses[i])+"\n";readEgsDtcEnvironment(codes[i],out);}}
+  dtcText=out;return true;
+}
 bool clearPowertrainDTCs(){if(activeModule!=MOD_ENGINE){lastError="DTC clearing is locked to the engine module in this build";return false;}if(!diagnosticSession){lastError="Not connected";return false;}uint8_t payload[64];size_t plen=0;if(!parseHexString(cfg.dtcClearPayload,payload,plen,sizeof(payload))){lastError="Invalid DTC clear payload setting";return false;}uint8_t r[256];size_t rn=0;busy=true;bool ok=sendKwpPayload(payload,plen,r,rn,900);busy=false;if(!ok)return false;const uint8_t*p=nullptr;size_t pn=0;if(!responsePayload(r,rn,p,pn))return false;uint8_t expected=(uint8_t)(payload[0]+0x40);if(pn>=1&&p[0]==expected){logx("DTC clear payload accepted by ECU");delay(200);readDTCs();return true;}lastError="Unexpected clear-DTC response: "+bytesHex(r,rn);return false;}
 bool parseHexString(String s,uint8_t*out,size_t&n,size_t maxn){s.replace(","," ");s.replace("-"," ");s.trim();n=0;int p=0;while(p<(int)s.length()&&n<maxn){while(p<(int)s.length()&&s[p]==' ')p++;if(p>=(int)s.length())break;int e=s.indexOf(' ',p);if(e<0)e=s.length();String t=s.substring(p,e);char*ep;long v=strtol(t.c_str(),&ep,16);if(*ep||v<0||v>255)return false;out[n++]=(uint8_t)v;p=e+1;}return n>0;}
 String sendManualPayload(String text){uint8_t p[64];size_t pn=0;if(!parseHexString(text,p,pn,sizeof(p)))return"Bad hex payload";uint8_t r[256];size_t rn=0;busy=true;bool ok=sendKwpPayload(p,pn,r,rn,900);busy=false;if(!ok)return"Failed: "+lastError+" | raw="+lastRxHex;return bytesHex(r,rn);}
