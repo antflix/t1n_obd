@@ -17,7 +17,31 @@ String egsRecognizedGearName(uint8_t x){switch(x){case 0:return"Inactive";case 1
 String egsProgramName(uint8_t x){switch(x){case 0:return"S";case 1:return"W";case 2:return"A";case 3:return"M";default:return"Out of Range";}}
 String egsConverterStatusName(uint8_t x){switch(x){case 0:return"Open";case 1:return"Open -> slipping";case 2:return"Slipping -> open";case 3:return"Slipping";case 4:return"Slipping -> closed";case 5:return"Closed -> slipping";case 6:return"Closed";default:return"Raw "+String(x);}}
 String egsMinMaxGearName(uint8_t x){switch(x){case 0:return"Inactive";case 1:return"1";case 2:return"2";case 3:return"3";case 4:return"4";case 5:return"5";default:return"Raw "+String(x);}}
-bool pollEGSGroup(uint8_t group){uint8_t payload[2]={0x21,group},r[256];size_t rn=0;bool ok=sendKwpPayload(payload,sizeof(payload),r,rn,650);if(!ok){notePollResult(false);return false;}const uint8_t*p=nullptr;size_t pn=0;if(!responsePayload(r,rn,p,pn)||pn<2||p[0]!=0x61||p[1]!=group){lastError="Unexpected EGS response";notePollResult(false);return false;}if(group==0x30&&pn>=20){setNum(egsOutputRpm,be16(p+18),"rpm",0);setTxt(egsGear,egsGearName(p[12]));setTxt(egsSelector,egsSelectorName(p[9]));if(p[13]!=0xFF)setNum(egsTemp,(double)p[13]-50.0,"°C",0);}else if(group==0x31&&pn>=22){setNum(egsTurbineRpm,be16(p+6),"rpm",0);setNum(egsVehicleSpeed,be16(p+18)*0.1,"km/h",1);}else if(group==0x34&&pn>=10)setNum(egsBattery,be16(p+2)*0.025,"V",2);notePollResult(true);return true;}
+bool pollEGSGroup(uint8_t group){uint8_t payload[2]={0x21,group},r[256];size_t rn=0;bool ok=sendKwpPayload(payload,sizeof(payload),r,rn,650);if(!ok){notePollResult(false);return false;}const uint8_t*p=nullptr;size_t pn=0;if(!responsePayload(r,rn,p,pn)||pn<2||p[0]!=0x61||p[1]!=group){lastError="Unexpected EGS response";notePollResult(false);return false;}
+  if(group==0x30&&pn>=24){
+    setNum(egsConverterSlip,be16(p+2),"rpm",0);setNum(egsConverterTargetSlip,be16(p+4),"rpm",0);setNum(egsConverterPressure,be16(p+6),"mbar",0);setTxt(egsConverterStatus,egsConverterStatusName(p[8]));
+    setTxt(egsSelector,egsSelectorName(p[9]));setTxt(egsProgram,egsProgramName(p[10]));setTxt(egsRecognizedGear,egsRecognizedGearName(p[11]));setTxt(egsGear,egsGearName(p[12]&0x0F));setTxt(egsTargetGear,egsTargetGearName(p[12]&0xF0));
+    if(p[13]!=0xFF)setNum(egsTemp,(double)p[13]-50.0,"°C",0);
+    setNum(egsEngineTorque,be16(p+14),"Nm",0);setNum(egsConvertedTorque,be16(p+16),"Nm",0);setNum(egsOutputRpm,be16(p+18),"rpm",0);
+    setTxt(egsKickdown,(p[20]&0x01)?"Active":"Inactive");setTxt(egsDownshift,(p[22]&0x01)?"Active":"Inactive");setTxt(egsUpshift,(p[22]&0x02)?"Active":"Inactive");setTxt(egsTccActive,(p[22]&0x80)?"Active":"Inactive");
+    setTxt(egsCurrentFault,(p[23]&0x01)?"Yes":"No");setTxt(egsLimp,(p[23]&0x02)?"Yes":"No");
+  }else if(group==0x31&&pn>=22){
+    setNum(egsN2Rpm,be16(p+2),"rpm",0);setNum(egsN3Rpm,be16(p+4),"rpm",0);setNum(egsTurbineRpm,be16(p+6),"rpm",0);setNum(egsEngineRpm,be16(p+8),"rpm",0);
+    setNum(egsWheelFLRpm,be16(p+10),"rpm",0);setNum(egsWheelFRRpm,be16(p+12),"rpm",0);setNum(egsWheelRLRpm,be16(p+14),"rpm",0);setNum(egsWheelRRRpm,be16(p+16),"rpm",0);
+    setNum(egsVehicleSpeed,be16(p+18)*0.1,"km/h",1);setNum(egsFrontSpeed,be16(p+20)*0.1,"km/h",1);
+  }else if(group==0x32&&pn>=14){
+    setNum(egsPedal,p[2],"%",0);setNum(egsGrade,be16(p+8)*0.001,"%",3);setTxt(egsMinGear,egsMinMaxGearName(p[12]));setTxt(egsMaxGear,egsMinMaxGearName(p[13]));
+  }else if(group==0x33&&pn>=17){
+    setNum(egsShiftPressure,be16(p+4),"mbar",0);setNum(egsModPressure,be16(p+6),"mbar",0);setNum(egsShiftCurrentTarget,be16(p+8),"mA",0);setNum(egsShiftCurrentActual,be16(p+10),"mA",0);setNum(egsModCurrentTarget,be16(p+12),"mA",0);setNum(egsModCurrentActual,be16(p+14),"mA",0);setNum(egsTccDuty,p[16],"/255",0);
+  }else if(group==0x34&&pn>=14){
+    setNum(egsBattery,be16(p+2)*0.025,"V",2);setNum(egsAskSupply,be16(p+4)*0.0049,"V",2);setNum(egsSensorSupply,be16(p+6)*0.0075,"V",2);setNum(egsValveSupply,be16(p+8)*0.025,"V",2);
+  }else if(group==0x40&&pn>=4){
+    uint16_t raw=be16(p+2);if(raw!=0xFFFF)setNum(egsOdometer,raw*2.0,"km",0);
+  }else if(group==0x54&&pn>=7){
+    setNum(egsCoolant,(double)p[6]-40.0,"°C",0);
+  }
+  notePollResult(true);return true;
+}
 uint8_t absPollIndex=0,egsPollIndex=0;
 void absLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;busy=true;pollABSGroup(1);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
 void egsLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;static const uint8_t groups[]={0x30,0x31,0x33,0x34,0x32,0x54,0x40};busy=true;pollEGSGroup(groups[egsPollIndex++%7]);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
