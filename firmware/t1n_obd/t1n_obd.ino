@@ -41,7 +41,7 @@ static const int RX_PIN = 16;
 static const bool TX_DRIVE_LOW_HIGH = true;
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.9.1";
+static const char* FIRMWARE_VERSION = "1.9.2";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -158,7 +158,7 @@ ValueState engCylCorr[5], engCylRpm[5];
 ValueState engIdleTarget, engDiagIdleTarget, engSpeedTarget, engAirMassTarget, engEgrAirMassTarget;
 ValueState engFuelReqADR, engFuelReqFGR, engFuelReqPWG, engFuelReqSync;
 ValueState absWheelFL, absWheelFR, absWheelRL, absWheelRR, absVoltage, absWheelSensorV, absBrakeLamp, absBrakeSwitch, absPump, absOutletFL, absOutletFR;
-ValueState egsTemp, egsGear, egsSelector, egsOutputRpm, egsTurbineRpm, egsVehicleSpeed, egsBattery;
+ValueState egsTemp, egsGear, egsTargetGear, egsSelector, egsProgram, egsOutputRpm, egsTurbineRpm, egsN2Rpm, egsN3Rpm, egsEngineRpm, egsWheelFLRpm, egsWheelFRRpm, egsWheelRLRpm, egsWheelRRRpm, egsVehicleSpeed, egsFrontSpeed, egsBattery, egsSensorSupply, egsAskSupply, egsValveSupply, egsConverterSlip, egsConverterTargetSlip, egsConverterPressure, egsEngineTorque, egsConvertedTorque, egsModPressure, egsShiftPressure, egsModCurrentActual, egsModCurrentTarget, egsShiftCurrentActual, egsShiftCurrentTarget, egsTccDuty, egsPedal, egsGrade, egsCoolant, egsOdometer, egsKickdown, egsLimp, egsCurrentFault, egsUpshift, egsDownshift, egsTccActive;
 
 void setNum(ValueState &v,double x,const String &unit,int decimals=1){v.value=x;v.unit=unit;v.text=String(x,decimals);v.valid=true;v.updatedMs=millis();}
 void setTxt(ValueState &v,const String &x){v.text=x;v.unit="";v.valid=true;v.updatedMs=millis();}
