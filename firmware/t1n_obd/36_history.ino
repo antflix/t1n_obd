@@ -266,7 +266,7 @@ String historyDataJson(uint8_t module,const String &id,const String &range){
   if(!now)return "{\"error\":\"Clock not synchronized\",\"points\":[]}";
   uint32_t span=range=="1h"?3600UL:range=="24h"?86400UL:
     range=="7d"?604800UL:range=="30d"?2592000UL:315360000UL;
-  uint32_t after=now>span?now-span:0,key=historyKey(module,id);
+  uint32_t after=now>span?now-span:0,key=historyKey(module,id.c_str());
   // Limit the response so a busy web client cannot exhaust ESP32 heap.
   String s="{\"ok\":true,\"points\":[";
   bool first=true;int emitted=0;
