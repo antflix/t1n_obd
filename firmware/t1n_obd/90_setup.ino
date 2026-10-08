@@ -3,13 +3,35 @@
 #endif
 uint32_t lastDtcScanMs=0,lastWifiRetryMs=0;
 String wifiConfigSource="none";
-String wifiLastEvent="No station connection event yet";int wifiReason=-1;
-uint32_t wifiLastEventMs=0,wifiConnectAttempts=0;
+// Event callback runs on the Wi-Fi task: only write plain scalar fields here.
+volatile int wifiEventType=0,wifiReason=-1;
+volatile uint32_t wifiLastEventMs=0;
+uint32_t wifiConnectAttempts=0;
 void wifiEventLog(WiFiEvent_t event,WiFiEventInfo_t info){
  wifiLastEventMs=millis();
- if(event==ARDUINO_EVENT_WIFI_STA_CONNECTED){wifiLastEvent="Associated with router";wifiReason=-1;}
- if(event==ARDUINO_EVENT_WIFI_STA_GOT_IP){wifiLastEvent="Connected; IP acquired";wifiReason=-1;}
- if(event==ARDUINO_EVENT_WIFI_STA_DISCONNECTED){wifiReason=info.wifi_sta_disconnected.reason;wifiLastEvent="Disconnected (reason "+String(wifiReason)+")";}
+ if(event==ARDUINO_EVENT_WIFI_STA_CONNECTED){wifiEventType=1;wifiReason=-1;}
+ else if(event==ARDUINO_EVENT_WIFI_STA_GOT_IP){wifiEventType=2;wifiReason=-1;}
+ else if(event==ARDUINO_EVENT_WIFI_STA_DISCONNECTED){wifiReason=info.wifi_sta_disconnected.reason;wifiEventType=3;}
+}
+String wifiLastEventText(){
+ switch(wifiEventType){
+ case 1:return "Associated with router; awaiting IP";
+ case 2:return "Connected and IP acquired";
+ case 3:return "Station disconnected";
+ default:return "No station event received";
+ }
+}
+String wifiDisconnectExplanation(){
+ switch(wifiReason){
+ case 2:return "Authentication expired (router did not complete authentication)";
+ case 15:return "Four-way WPA handshake timed out";
+ case 201:return "No matching access point found";
+ case 202:return "Router rejected authentication";
+ case 203:return "Association failed";
+ case 204:return "Connection/handshake timed out";
+ case -1:return "No disconnect reason recorded";
+ default:return "Wi-Fi reason "+String(wifiReason);
+ }
 }
 String wifiStatusName(wl_status_t st){
   switch(st){case WL_CONNECTED:return "Connected";case WL_NO_SSID_AVAIL:return "Network not found";case WL_CONNECT_FAILED:return "Authentication/connection failed";case WL_CONNECTION_LOST:return "Connection lost";case WL_DISCONNECTED:return "Disconnected";case WL_IDLE_STATUS:return "Connecting/idle";default:return "Status "+String((int)st);}
@@ -39,23 +61,30 @@ String wifiDiagnosticsJson(){
   s+="\"apIP\":\""+WiFi.softAPIP().toString()+"\",";
   s+="\"rssi\":"+String(WiFi.status()==WL_CONNECTED?WiFi.RSSI():0)+",";
   s+="\"passwordConfigured\":"+String(wifiPASS.length()?"true":"false")+",";
-  s+="\"passwordLength\":"+String(wifiPASS.length())+",";s+="\"lastEvent\":\""+jsonEscape(wifiLastEvent)+"\",";s+="\"disconnectReason\":"+String(wifiReason)+",";s+="\"connectAttempts\":"+String(wifiConnectAttempts)+",";s+="\"eventAgeSeconds\":"+String((millis()-wifiLastEventMs)/1000);
+  s+="\"passwordLength\":"+String(wifiPASS.length())+",";s+="\"lastEvent\":\""+jsonEscape(wifiLastEventText())+"\",";s+="\"disconnectReason\":"+String(wifiReason)+",";s+="\"disconnectExplanation\":\""+jsonEscape(wifiDisconnectExplanation())+"\",";s+="\"connectAttempts\":"+String(wifiConnectAttempts)+",";s+="\"eventAgeSeconds\":"+String((millis()-wifiLastEventMs)/1000);
   return s+"}";
 }
 String wifiPage(){
-  return R"UI(<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>T1N Wi-Fi</title><style>body{font:16px system-ui;background:#091423;color:#f2f6ff;max-width:620px;margin:auto;padding:22px}section{background:#152539;border:1px solid #33506e;border-radius:15px;padding:18px;margin-top:15px}input,button{font:inherit;padding:12px;margin:7px 0;border-radius:9px}input{width:100%;box-sizing:border-box}button{background:#2779e6;color:#fff;border:0}a{color:#9fcaff}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><a href="/">Back to scanner</a><h2>Van Wi-Fi connection</h2><section><pre id="status">Checking...</pre><button onclick="refresh()">Refresh status</button><button onclick="scan()">Scan nearby networks</button><pre id="scanOutput"></pre></section><section><h3>Change Wi-Fi credentials</h3><p>Only use if the built-in AntNet connection fails. Saved settings override the GitHub build credentials.</p><form action="/wifi/save" method="POST"><label>Wi-Fi network<input name="ssid" id="ssid" required maxlength="32"></label><label>Wi-Fi password<input name="password" type="password" required minlength="8" maxlength="63"></label><button type="submit">Save and reconnect</button></form></section><script>async function scan(){let p=document.querySelector("#scanOutput");p.textContent="Scanning...";try{let d=await(await fetch("/api/wifi/scan")).json();p.textContent=d.networks.map(x=>x.ssid+" / "+x.rssi+" dBm / channel "+x.channel).join(String.fromCharCode(10))||"No networks found";}catch(e){p.textContent=String(e)}}async function refresh(){try{let d=await(await fetch('/api/wifi',{cache:'no-store'})).json();document.querySelector('#status').textContent='Network: '+d.ssid+'\nSource: '+d.source+'\nWi-Fi: '+d.status+' (code '+d.statusCode+')\nStation IP: '+d.stationIP+'\nSignal: '+d.rssi+' dBm\nPassword configured: '+d.passwordConfigured+' ('+d.passwordLength+' characters)\nAccess point: '+d.apIP+'\nLast event: '+d.lastEvent+'\nDisconnect reason: '+d.disconnectReason+'\nConnection attempts: '+d.connectAttempts+'\nEvent age: '+d.eventAgeSeconds+' seconds';document.querySelector('#ssid').value=d.ssid||'';}catch(e){document.querySelector('#status').textContent='Unable to retrieve status: '+e}}refresh();setInterval(refresh,4000)</script></body></html>)UI";
+  return R"UI(<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>T1N Wi-Fi</title><style>body{font:16px system-ui;background:#091423;color:#f2f6ff;max-width:620px;margin:auto;padding:22px}section{background:#152539;border:1px solid #33506e;border-radius:15px;padding:18px;margin-top:15px}input,button{font:inherit;padding:12px;margin:7px 0;border-radius:9px}input{width:100%;box-sizing:border-box}button{background:#2779e6;color:#fff;border:0}a{color:#9fcaff}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><a href="/">Back to scanner</a><h2>Van Wi-Fi connection</h2><section><pre id="status">Checking...</pre><button onclick="refresh()">Refresh status</button><button onclick="scan()">Scan nearby networks</button><pre id="scanOutput"></pre></section><section><h3>Change Wi-Fi credentials</h3><p>Only use if the built-in AntNet connection fails. Saved settings override the GitHub build credentials.</p><form action="/wifi/save" method="POST"><label>Wi-Fi network<input name="ssid" id="ssid" required maxlength="32"></label><label>Wi-Fi password<input name="password" type="password" required minlength="8" maxlength="63"></label><button type="submit">Save and reconnect</button></form></section><script>async function scan(){let p=document.querySelector("#scanOutput");p.textContent="Scanning...";try{let d=await(await fetch("/api/wifi/scan")).json();p.textContent=d.error?d.error:(d.networks.map(x=>x.ssid+" / "+x.rssi+" dBm / channel "+x.channel).join(String.fromCharCode(10))||"Scan completed: 0 networks");}catch(e){p.textContent="Wi-Fi scan error: "+String(e)}}async function refresh(){try{let d=await(await fetch('/api/wifi',{cache:'no-store'})).json();document.querySelector('#status').textContent='Network: '+d.ssid+'\nSource: '+d.source+'\nWi-Fi: '+d.status+' (code '+d.statusCode+')\nStation IP: '+d.stationIP+'\nSignal: '+d.rssi+' dBm\nPassword configured: '+d.passwordConfigured+' ('+d.passwordLength+' characters)\nAccess point: '+d.apIP+'\nLast event: '+d.lastEvent+'\nDisconnect reason: '+d.disconnectReason+' ('+d.disconnectExplanation+')'+'\nConnection attempts: '+d.connectAttempts+'\nEvent age: '+d.eventAgeSeconds+' seconds';document.querySelector('#ssid').value=d.ssid||'';}catch(e){document.querySelector('#status').textContent='Unable to retrieve status: '+e}}refresh();setInterval(refresh,4000)</script></body></html>)UI";
 }
 
 void setupRoutes(){
 web.on("/wifi",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/html; charset=utf-8",wifiPage());});
 web.on("/api/wifi",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",wifiDiagnosticsJson());});
-web.on("/api/wifi/scan",HTTP_GET,[]{int n=WiFi.scanNetworks(false,true);String s="{\"networks\":[";for(int i=0;i<n;i++){if(i)s+=",";s+="{\"ssid\":\""+jsonEscape(WiFi.SSID(i))+"\",\"rssi\":"+String(WiFi.RSSI(i))+",\"channel\":"+String(WiFi.channel(i))+"}";}s+="]}";WiFi.scanDelete();web.send(200,"application/json",s);});
+web.on("/api/wifi/scan",HTTP_GET,[]{
+ // Scan results must distinguish a radio/busy error from genuinely zero networks.
+ int n=WiFi.scanNetworks(false,true);
+ if(n<0){WiFi.scanDelete();web.send(503,"application/json","{\"error\":\"Scan failed or station radio is busy; try again after reconnect settles\"}");return;}
+ String s="{\"networks\":[";
+ for(int i=0;i<n;i++){if(i)s+=",";s+="{\"ssid\":\""+jsonEscape(WiFi.SSID(i))+"\",\"rssi\":"+String(WiFi.RSSI(i))+",\"channel\":"+String(WiFi.channel(i))+"}";}
+ s+="]}";WiFi.scanDelete();web.send(200,"application/json",s);
+});
 web.on("/wifi/save",HTTP_POST,[]{
   String ssid=web.arg("ssid"),password=web.arg("password");ssid.trim();
   if(!ssid.length()||ssid.length()>32||password.length()<8||password.length()>63){web.send(400,"text/plain","Invalid Wi-Fi network or password length");return;}
   Preferences wp;if(!wp.begin("t1nwifi",false)){web.send(500,"text/plain","Unable to save Wi-Fi settings");return;}
   wp.putString("ssid",ssid);wp.putString("password",password);wp.end();
-  wifiSSID=ssid;wifiPASS=password;wifiConfigSource="Web UI saved settings";
+  wifiSSID=ssid;wifiPASS=password;wifiConfigSource="Web UI saved settings";lastWifiRetryMs=millis();
   web.sendHeader("Location","/wifi",true);web.send(303,"text/plain","Saved; reconnecting");
   WiFi.disconnect();wifiConnectAttempts++;WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
 });
@@ -95,5 +124,20 @@ web.on("/payload",HTTP_POST,[]{if(!diagnosticSession||busy){web.send(409,"text/p
 web.on("/api/update-latest",HTTP_POST,[]{if(busy){web.send(409,"text/plain","Scanner busy");return;}activity("Firmware update check/install requested");autoReconnect=false;livePolling=false;diagnosticSession=false;releaseKL();String v,u,sha,r;if(!fetchLatestManifest(v,u,sha,r)){web.send(502,"text/plain","Manifest failed: "+r);return;}bool ok=installFirmwareFromUrl(u,sha,r);web.sendHeader("Connection","close");web.send(ok?200:500,"text/plain",ok?"Installed "+v+". "+r+". Rebooting...":r);if(ok){delay(800);ESP.restart();}});
 web.on("/api/update",HTTP_POST,[]{bool ok=!Update.hasError();web.sendHeader("Connection","close");web.send(ok?200:500,"text/plain",ok?"Firmware installed. Rebooting...":String("Update failed: ")+Update.errorString());if(ok){delay(700);ESP.restart();}},[]{HTTPUpload&up=web.upload();if(up.status==UPLOAD_FILE_START){autoReconnect=false;livePolling=false;diagnosticSession=false;releaseKL();if(!up.filename.endsWith(".bin")){Update.abort();return;}Update.begin(UPDATE_SIZE_UNKNOWN,U_FLASH);}else if(up.status==UPLOAD_FILE_WRITE){if(!Update.hasError())Update.write(up.buf,up.currentSize);}else if(up.status==UPLOAD_FILE_END){if(!Update.hasError())Update.end(true);}else if(up.status==UPLOAD_FILE_ABORTED)Update.abort();});
 }
-void setup(){Serial.begin(115200);pinMode(RX_PIN,INPUT);loadAllSettings();applyWifiSettings();initRelayRouting();releaseKL();WiFi.mode(WIFI_AP_STA);WiFi.setSleep(false);WiFi.onEvent(wifiEventLog);WiFi.softAP(apSSID.c_str(),apPASS.c_str());if(wifiSSID.length()){wifiConnectAttempts++;WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());uint32_t t=millis();while(WiFi.status()!=WL_CONNECTED&&millis()-t<8000)delay(100);}setupRoutes();web.begin();activity("T1N Scanner "+String(FIRMWARE_VERSION)+" booted");logx(String("T1N Scanner ")+FIRMWARE_VERSION+" ready");logx(String("AP http://")+WiFi.softAPIP().toString()+" | station "+(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():String("not connected")));setStatus("DISCONNECTED - SELECT MODULE");}
-void loop(){web.handleClient();if(jobConnect&&!busy){jobConnect=false;connectModule(requestedModule);}livePollTick();if(diagnosticSession&&!busy&&activeModule!=MOD_ABS&&millis()-lastDtcScanMs>=15000){readDTCs();lastDtcScanMs=millis();}if(diagnosticSession&&activeModule!=MOD_ABS&&!busy&&!livePolling&&millis()-lastGoodTrafficMs>=cfg.keepaliveIntervalMs){busy=true;testerPresent();busy=false;}if(!diagnosticSession&&autoReconnect&&reconnectAtMs&&(int32_t)(millis()-reconnectAtMs)>=0&&!busy&&!jobConnect){reconnectAtMs=0;jobConnect=true;setStatus("AUTO RECONNECT QUEUED - "+moduleName(requestedModule));}if(wifiSSID.length()&&WiFi.status()!=WL_CONNECTED&&millis()-lastWifiRetryMs>30000){lastWifiRetryMs=millis();WiFi.disconnect();wifiConnectAttempts++;WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());}delay(2);}
+void setup(){Serial.begin(115200);pinMode(RX_PIN,INPUT);loadAllSettings();applyWifiSettings();initRelayRouting();releaseKL();// Connect the station *before* starting SoftAP. A single-radio ESP32 otherwise
+// has to arbitrate channels while authenticating to AntNet.
+WiFi.mode(WIFI_STA);WiFi.setSleep(false);WiFi.onEvent(wifiEventLog);
+WiFi.setAutoReconnect(true);
+lastWifiRetryMs=millis();
+if(wifiSSID.length()){
+ wifiConnectAttempts++;WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
+ uint32_t t=millis();while(WiFi.status()!=WL_CONNECTED&&millis()-t<12000)delay(100);
+}
+// Always bring up the recovery AP, regardless of station success.
+WiFi.mode(WIFI_AP_STA);WiFi.softAP(apSSID.c_str(),apPASS.c_str());
+setupRoutes();web.begin();activity("T1N Scanner "+String(FIRMWARE_VERSION)+" booted");logx(String("T1N Scanner ")+FIRMWARE_VERSION+" ready");logx(String("AP http://")+WiFi.softAPIP().toString()+" | station "+(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():String("not connected")));setStatus("DISCONNECTED - SELECT MODULE");}
+void loop(){web.handleClient();if(jobConnect&&!busy){jobConnect=false;connectModule(requestedModule);}livePollTick();if(diagnosticSession&&!busy&&activeModule!=MOD_ABS&&millis()-lastDtcScanMs>=15000){readDTCs();lastDtcScanMs=millis();}if(diagnosticSession&&activeModule!=MOD_ABS&&!busy&&!livePolling&&millis()-lastGoodTrafficMs>=cfg.keepaliveIntervalMs){busy=true;testerPresent();busy=false;}if(!diagnosticSession&&autoReconnect&&reconnectAtMs&&(int32_t)(millis()-reconnectAtMs)>=0&&!busy&&!jobConnect){reconnectAtMs=0;jobConnect=true;setStatus("AUTO RECONNECT QUEUED - "+moduleName(requestedModule));}if(wifiSSID.length()&&WiFi.status()!=WL_CONNECTED&&millis()-lastWifiRetryMs>90000){
+ lastWifiRetryMs=millis();wifiConnectAttempts++;
+ // Do not forcibly disconnect an already-connecting station every 30 seconds.
+ WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
+}delay(2);}
