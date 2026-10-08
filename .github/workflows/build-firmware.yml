@@ -30,6 +30,19 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
           arduino-cli core list
+      - name: Inject Wi-Fi credential into build
+        env:
+          ANTNET_WIFI_PASSWORD: ${{ secrets.ANTNET_WIFI_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, sys
+          password = os.environ.get("ANTNET_WIFI_PASSWORD", "")
+          if not password:
+              sys.exit("ANTNET_WIFI_PASSWORD GitHub Actions secret is not configured")
+          pathlib.Path("firmware/t1n_obd/wifi_build_config.h").write_text(
+              "#pragma once\n#define T1N_BUILD_WIFI_PASSWORD " + json.dumps(password) + "\n"
+          )
+          PY
       - name: Compile ESP32 Dev Module with OTA partition
         run: |
           mkdir -p build dist
