@@ -271,7 +271,7 @@ String historyDataJson(uint8_t module,const String &id,const String &range){
   String s="{\"ok\":true,\"points\":[";
   bool first=true;int emitted=0;
   for(int tier=2;tier>=0;tier--){
-    if(range=="1h"&&tier!=0)continue;
+    if(range=="1h"&&tier==2)continue;
     if(range=="24h"&&tier==2)continue;
     HistoryRing &ring=hRings[tier];
     File f=SPIFFS.open(ring.path,"r");if(!f)continue;
@@ -283,7 +283,7 @@ String historyDataJson(uint8_t module,const String &id,const String &range){
       if(!historyValid(r)||r.key!=key||r.epoch<after||r.epoch>now+120)continue;
       uint32_t age=now-r.epoch;
       if(tier==0 && age>3600UL)continue;
-      if(tier==1 && (age<=3600UL || age>86400UL))continue;
+      if(tier==1 && age>86400UL)continue;
       if(tier==2 && age<=86400UL)continue;
       if(emitted>=350)break;
       if(!first)s+=",";
