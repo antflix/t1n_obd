@@ -2,10 +2,10 @@
 // ESP32 UART2 is reassigned to the selected RX/TX GPIO pair; no relays.
 // Each transceiver: RXD pin 1 -> RX GPIO with individual 3.3V pull-up,
 // TXD pin 4 <- TX GPIO, EN pin 2 -> 3.3V, LIN pin 6 -> assigned OBD pin.
-// The chip-2 pair has been swapped: RX37 / TX14.
-// WARNING: GPIO37 must be physically exposed on the specific ESP32 board.
-static const uint8_t K_RX[4]  = {13,37,26,33};
-static const uint8_t K_TX[4]  = {12,14,25,32};
+// Chip 2 original wiring: RX14 / TX27.
+// Check all selected pins against the exact ESP32 board variant.
+static const uint8_t K_RX[4]  = {13,14,26,33};
+static const uint8_t K_TX[4]  = {12,27,25,32};
 static const uint8_t K_OBD[4] = {1,7,9,11};
 static const uint8_t K_MODULE[4] = {255,0,1,2}; // unassigned, engine, ABS, EGS
 int selectedKline = -1;
