@@ -283,8 +283,7 @@ String historyDataJson(uint8_t module,const String &id,const String &range){
       if(!historyValid(r)||r.key!=key||r.epoch<after||r.epoch>now+120)continue;
       uint32_t age=now-r.epoch;
       if(tier==0 && age>3600UL)continue;
-      if(tier==1 && (age<=3600UL || age>7*86400UL))continue;
-      if(tier==2 && age<=7*86400UL && range!="30d"&&range!="all")continue;
+      if(tier==1 && (age<=3600UL || age>86400UL))continue;
       if(tier==2 && age<=86400UL)continue;
       if(emitted>=350)break;
       if(!first)s+=",";
