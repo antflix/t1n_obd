@@ -41,7 +41,7 @@ int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.9.8-wifi-recovery";
+static const char* FIRMWARE_VERSION = "1.9.9-history-fix";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
