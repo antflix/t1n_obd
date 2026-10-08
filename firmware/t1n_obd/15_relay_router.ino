@@ -5,7 +5,7 @@
 // Chip 2 original wiring: RX14 / TX27.
 // Check all selected pins against the exact ESP32 board variant.
 static const uint8_t K_RX[4]  = {13,14,26,33};
-static const uint8_t K_TX[4]  = {12,27,25,32};
+static const uint8_t K_TX[4]  = {23,27,25,32};
 static const uint8_t K_OBD[4] = {1,7,9,11};
 static const uint8_t K_MODULE[4] = {255,0,1,2}; // unassigned, engine, ABS, EGS
 int selectedKline = -1;
