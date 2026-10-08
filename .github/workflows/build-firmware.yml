@@ -59,6 +59,10 @@ jobs:
             -printf '%s %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
           test -n "$APP_BIN"
           cp "$APP_BIN" dist/firmware.bin
+          # Full flash image for USB installers such as ESPHome Web.
+          FULL_BIN="$(find build -maxdepth 1 -type f -name '*.merged.bin' -print -quit)"
+          test -n "$FULL_BIN" || { echo "Missing merged flash image"; exit 1; }
+          cp "$FULL_BIN" dist/firmware-full.bin
           sha256sum dist/firmware.bin | awk '{print $1}' > dist/firmware.sha256
           python3 - <<'PY'
           import datetime, json, os, pathlib, re
@@ -76,7 +80,7 @@ jobs:
         run: |
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest \
-            dist/firmware.bin dist/firmware.sha256 dist/manifest.json \
+            dist/firmware.bin dist/firmware-full.bin dist/firmware.sha256 dist/manifest.json \
             --target "$GITHUB_SHA" \
             --title "Latest T1N OBD Firmware" \
             --notes "Automatically built from main at commit $GITHUB_SHA. The latest tag intentionally moves so the ESP32 always has one stable OTA URL."
