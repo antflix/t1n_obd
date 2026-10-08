@@ -23,9 +23,9 @@ struct HistoryRing {
   uint32_t serial=1;
 };
 static HistoryRing hRings[3]={
-  {"/hist_now.dat",768}, // 24 KiB
-  {"/hist_15m.dat",768}, // 24 KiB
-  {"/hist_day.dat",1200} // 37.5 KiB
+  {"/hist_now.dat",640}, // 20 KiB
+  {"/hist_15m.dat",640}, // 20 KiB
+  {"/hist_day.dat",1024} // 32 KiB
 };
 static bool hReady=false;
 static String hError;
@@ -220,7 +220,7 @@ void historyBegin(){
   // First use formats ONLY the dedicated SPIFFS data partition, not NVS/OTA.
   hReady=SPIFFS.begin(true);
   if(!hReady){hError="Unable to mount SPIFFS";return;}
-  if(SPIFFS.totalBytes()<110000){
+  if(SPIFFS.totalBytes()<80000){
     hReady=false;hError="Flash history partition smaller than expected";
     SPIFFS.end();return;
   }
