@@ -5,7 +5,7 @@ String advancedPage(){return R"HTML(<!doctype html><html><head><meta name=viewpo
 <div class=c><b>KWP payload terminal</b><p><input id=raw style="width:70%" placeholder="21 13"> <button onclick=sendRaw()>SEND</button></p><pre id=ans></pre></div>
 <div class=c><b>DTC tools</b><p><button onclick=p('/dtc/read')>READ</button> <button class=red onclick=clearDtc()>CLEAR ENGINE DTCs</button></p><pre id=dtc></pre></div>
 <div class=c><b>TLIN1027 channel wiring (fixed)</b><div class=muted>Each channel is directly connected; UART2 moves to the selected GPIO pair. No relays.</div><pre>Chip 1: OBD 1  · RX 13 · TX 12 (reserved)
-Chip 2: OBD 7  · RX 37 · TX 14 (Engine)
+Chip 2: OBD 7  · RX 14 · TX 27 (Engine)
 Chip 3: OBD 9  · RX 26 · TX 25 (ABS)
 Chip 4: OBD 11 · RX 33 · TX 32 (Transmission)</pre><pre id=relayDiag>...</pre></div>
 <div class=c><b>Transport settings</b><div class=g><label>Baud<br><input id=baud></label><label>Byte spacing µs<br><input id=byteSpacingUs></label><label>Fast LOW µs<br><input id=fastLowUs></label><label>Fast first byte µs<br><input id=fastFirstByteUs></label><label>Poll groups<br><input id=pollGroups></label><label>Poll interval ms<br><input id=pollIntervalMs></label></div><p><button onclick=saveCfg()>SAVE SETTINGS</button> <button onclick=p('/config/importlab')>IMPORT PROVEN LAB TIMING</button> <button onclick=p('/config/defaults')>RESTORE DEFAULTS</button></p><div class=muted>Full replay frame/timestamp values remain stored in NVS and defaults; the most commonly changed transport values are exposed here.</div></div>
