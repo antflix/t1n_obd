@@ -36,8 +36,8 @@
 #include <mbedtls/md.h>
 
 // ---------------- Hardware ----------------
-int TX_PIN = 14; // default channel 2: engine OBD7
-int RX_PIN = 37;
+int TX_PIN = 27; // default channel 2: engine OBD7
+int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
