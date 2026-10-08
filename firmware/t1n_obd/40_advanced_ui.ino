@@ -4,7 +4,7 @@ String advancedPage(){return R"HTML(<!doctype html><html><head><meta name=viewpo
 <div class=c><b>Connection</b><p><button onclick=p('/connect')>CONNECT CR2</button> <button onclick=p('/disconnect')>DISCONNECT</button> <button onclick=p('/poll/start')>START POLL</button> <button onclick=p('/poll/stop')>STOP POLL</button></p><pre id=st>...</pre></div>
 <div class=c><b>KWP payload terminal</b><p><input id=raw style="width:70%" placeholder="21 13"> <button onclick=sendRaw()>SEND</button></p><pre id=ans></pre></div>
 <div class=c><b>DTC tools</b><p><button onclick=p('/dtc/read')>READ</button> <button class=red onclick=clearDtc()>CLEAR ENGINE DTCs</button></p><pre id=dtc></pre></div>
-<div class=c><b>TLIN1027 channel wiring (fixed)</b><div class=muted>Each channel is directly connected; UART2 moves to the selected GPIO pair. No relays.</div><pre>Chip 1: OBD 1  · RX 13 · TX 12 (reserved)
+<div class=c><b>TLIN1027 channel wiring (fixed)</b><div class=muted>Each channel is directly connected; UART2 moves to the selected GPIO pair. No relays.</div><pre>Chip 1: OBD 1  · RX 13 · TX 23 (reserved)
 Chip 2: OBD 7  · RX 14 · TX 27 (Engine)
 Chip 3: OBD 9  · RX 26 · TX 25 (ABS)
 Chip 4: OBD 11 · RX 33 · TX 32 (Transmission)</pre><pre id=relayDiag>...</pre></div>
