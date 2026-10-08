@@ -93,6 +93,21 @@ web.on("/advanced",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.se
 web.on("/update",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/html; charset=utf-8",updatePage());});
 web.on("/api/status",HTTP_GET,[]{web.send(200,"application/json",moduleStatusJson());});
 web.on("/api/sensors",HTTP_GET,[]{web.send(200,"application/json",sensorsJson());});
+web.on("/api/history/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",historyStatusJson());});
+web.on("/api/history/data",HTTP_GET,[]{
+  int module=web.arg("module").toInt();
+  String range=web.arg("range");if(range!="1h"&&range!="24h"&&range!="7d"&&range!="30d"&&range!="all")range="24h";
+  web.sendHeader("Cache-Control","no-store");
+  web.send(200,"application/json",historyDataJson((uint8_t)module,web.arg("id"),range));
+});
+web.on("/api/history/clock",HTTP_POST,[]{
+  String epoch=web.arg("epoch");
+  if(epoch.length()<10||epoch.length()>12){web.send(400,"text/plain","Invalid UTC time");return;}
+  char *end=nullptr;unsigned long value=strtoul(epoch.c_str(),&end,10);
+  if(!end||*end||!historySetClock((uint32_t)value)){web.send(400,"text/plain","Invalid UTC time");return;}
+  web.send(200,"text/plain","Clock synchronized");
+});
+
 web.on("/sensors",HTTP_GET,[]{web.send(200,"application/json",sensorsJson());});
 web.on("/api/dtc",HTTP_GET,[]{web.send(200,"text/plain",dtcText);});
 web.on("/api/activity-log",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/plain; charset=utf-8",activityLogText);});
@@ -135,8 +150,8 @@ if(wifiSSID.length()){
 }
 // Always bring up the recovery AP, regardless of station success.
 WiFi.mode(WIFI_AP_STA);WiFi.softAP(apSSID.c_str(),apPASS.c_str());
-setupRoutes();web.begin();activity("T1N Scanner "+String(FIRMWARE_VERSION)+" booted");logx(String("T1N Scanner ")+FIRMWARE_VERSION+" ready");logx(String("AP http://")+WiFi.softAPIP().toString()+" | station "+(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():String("not connected")));setStatus("DISCONNECTED - SELECT MODULE");}
-void loop(){web.handleClient();if(jobConnect&&!busy){jobConnect=false;connectModule(requestedModule);}livePollTick();if(diagnosticSession&&!busy&&activeModule!=MOD_ABS&&millis()-lastDtcScanMs>=15000){readDTCs();lastDtcScanMs=millis();}if(diagnosticSession&&activeModule!=MOD_ABS&&!busy&&!livePolling&&millis()-lastGoodTrafficMs>=cfg.keepaliveIntervalMs){busy=true;testerPresent();busy=false;}if(!diagnosticSession&&autoReconnect&&reconnectAtMs&&(int32_t)(millis()-reconnectAtMs)>=0&&!busy&&!jobConnect){reconnectAtMs=0;jobConnect=true;setStatus("AUTO RECONNECT QUEUED - "+moduleName(requestedModule));}if(wifiSSID.length()&&WiFi.status()!=WL_CONNECTED&&millis()-lastWifiRetryMs>90000){
+historyBegin();setupRoutes();web.begin();activity("T1N Scanner "+String(FIRMWARE_VERSION)+" booted");logx(String("T1N Scanner ")+FIRMWARE_VERSION+" ready");logx(String("AP http://")+WiFi.softAPIP().toString()+" | station "+(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():String("not connected")));setStatus("DISCONNECTED - SELECT MODULE");}
+void loop(){web.handleClient();if(jobConnect&&!busy){jobConnect=false;connectModule(requestedModule);}livePollTick();historyTick();if(diagnosticSession&&!busy&&activeModule!=MOD_ABS&&millis()-lastDtcScanMs>=15000){readDTCs();lastDtcScanMs=millis();}if(diagnosticSession&&activeModule!=MOD_ABS&&!busy&&!livePolling&&millis()-lastGoodTrafficMs>=cfg.keepaliveIntervalMs){busy=true;testerPresent();busy=false;}if(!diagnosticSession&&autoReconnect&&reconnectAtMs&&(int32_t)(millis()-reconnectAtMs)>=0&&!busy&&!jobConnect){reconnectAtMs=0;jobConnect=true;setStatus("AUTO RECONNECT QUEUED - "+moduleName(requestedModule));}if(wifiSSID.length()&&WiFi.status()!=WL_CONNECTED&&millis()-lastWifiRetryMs>90000){
  lastWifiRetryMs=millis();wifiConnectAttempts++;
  // Do not forcibly disconnect an already-connecting station every 30 seconds.
  WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
