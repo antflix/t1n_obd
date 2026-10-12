@@ -6,8 +6,8 @@
 // Check all selected pins against the exact ESP32 board variant.
 static const uint8_t K_RX[4]  = {13,14,26,33};
 static const uint8_t K_TX[4]  = {23,27,25,32};
-static const uint8_t K_OBD[4] = {1,7,9,11};
-static const uint8_t K_MODULE[4] = {255,0,1,2}; // unassigned, engine, ABS, EGS
+static const uint8_t K_OBD[4] = {15,7,9,11};
+static const uint8_t K_MODULE[4] = {3,0,1,2}; // HVAC, engine, ABS, EGS
 int selectedKline = -1;
 bool relayGpioUsable(uint8_t pin){return pin>=1&&pin<=39;}
 int relayIndexForModule(ModuleId m) {
@@ -24,7 +24,7 @@ void initRelayRouting(){
   allRelaysOff();
   selectedKline=-1;
   TX_PIN=K_TX[1];RX_PIN=K_RX[1];
-  activity("Four independent TLIN1027 channels initialized (OBD 1/7/9/11); no relays");
+  activity("Four independent TLIN1027 channels initialized (OBD 15/7/9/11); no relays");
 }
 bool selectRelayForModule(ModuleId m){
   int idx=relayIndexForModule(m);
