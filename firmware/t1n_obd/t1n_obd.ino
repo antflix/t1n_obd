@@ -41,7 +41,7 @@ int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.10.0-adaptive-history";
+static const char* FIRMWARE_VERSION = "1.10.1-hzr-fan";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -127,7 +127,7 @@ bool livePolling = false;
 uint32_t nextPollMs = 0;
 uint32_t lastGoodTrafficMs = 0;
 
-enum ModuleId : uint8_t { MOD_ENGINE=0, MOD_ABS=1, MOD_EGS=2 };
+enum ModuleId : uint8_t { MOD_ENGINE=0, MOD_ABS=1, MOD_EGS=2, MOD_HZR=3 };
 bool relayGpioUsable(uint8_t pin);
 void allRelaysOff();
 void initRelayRouting();
@@ -163,9 +163,9 @@ ValueState egsTemp, egsGear, egsTargetGear, egsRecognizedGear, egsSelector, egsP
 void setNum(ValueState &v,double x,const String &unit,int decimals=1){v.value=x;v.unit=unit;v.text=String(x,decimals);v.valid=true;v.updatedMs=millis();}
 void setTxt(ValueState &v,const String &x){v.text=x;v.unit="";v.valid=true;v.updatedMs=millis();}
 bool stale(const ValueState &v,uint32_t age=6000){return !v.valid || millis()-v.updatedMs>age;}
-String moduleName(ModuleId m){return m==MOD_ENGINE?"Engine / CR2":m==MOD_ABS?"ABS / ABSBR901":"Transmission / EGS52";}
-uint8_t moduleAddr(ModuleId m){return m==MOD_ENGINE?0x12:m==MOD_ABS?0x34:0x20;}
-uint8_t moduleObdPin(ModuleId m){return m==MOD_ENGINE?7:m==MOD_ABS?9:11;}
+String moduleName(ModuleId m){return m==MOD_ENGINE?"Engine / CR2":m==MOD_ABS?"ABS / ABSBR901":m==MOD_EGS?"Transmission / EGS52":"HVAC / HZRKL";}
+uint8_t moduleAddr(ModuleId m){return m==MOD_ENGINE?0x12:m==MOD_ABS?0x34:m==MOD_EGS?0x20:0x50;}
+uint8_t moduleObdPin(ModuleId m){return m==MOD_ENGINE?7:m==MOD_ABS?9:m==MOD_EGS?11:15;}
 
 uint32_t p3ReadyAtMs = 0;
 uint8_t keepaliveMisses = 0;
@@ -208,5 +208,11 @@ LiveGroup liveGroups[] = {
 static const int LIVE_GROUP_COUNT = sizeof(liveGroups) / sizeof(liveGroups[0]);
 int pollIndex = 0;
 
+extern bool hzrFanOverrideActive;
+bool hzrFanRead(String &out);
+bool hzrFanStart(String &out);
+bool hzrFanStop(String &out);
+void hzrFanTick();
+String hzrFanFeedbackJson();
 void markSessionLost(const String &why);
 void notePollResult(bool ok);
