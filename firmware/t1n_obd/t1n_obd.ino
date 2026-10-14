@@ -41,7 +41,7 @@ int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.10.1-hzr-fan";
+static const char* FIRMWARE_VERSION = "1.10.2-live-charts";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -162,7 +162,7 @@ ValueState egsTemp, egsGear, egsTargetGear, egsRecognizedGear, egsSelector, egsP
 
 void setNum(ValueState &v,double x,const String &unit,int decimals=1){v.value=x;v.unit=unit;v.text=String(x,decimals);v.valid=true;v.updatedMs=millis();}
 void setTxt(ValueState &v,const String &x){v.text=x;v.unit="";v.valid=true;v.updatedMs=millis();}
-bool stale(const ValueState &v,uint32_t age=6000){return !v.valid || millis()-v.updatedMs>age;}
+bool stale(const ValueState &v,uint32_t age=24000){return !v.valid || millis()-v.updatedMs>age;}
 String moduleName(ModuleId m){return m==MOD_ENGINE?"Engine / CR2":m==MOD_ABS?"ABS / ABSBR901":m==MOD_EGS?"Transmission / EGS52":"HVAC / HZRKL";}
 uint8_t moduleAddr(ModuleId m){return m==MOD_ENGINE?0x12:m==MOD_ABS?0x34:m==MOD_EGS?0x20:0x50;}
 uint8_t moduleObdPin(ModuleId m){return m==MOD_ENGINE?7:m==MOD_ABS?9:m==MOD_EGS?11:15;}
