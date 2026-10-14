@@ -31,7 +31,33 @@ bool readEgsIdentification(){
 bool connectFastModule(ModuleId module){activity("Connecting to "+moduleName(module)+" at address 0x"+hex2(moduleAddr(module))+" on OBD pin "+String(moduleObdPin(module)));busy=true;livePolling=false;diagnosticSession=false;cr2Connected=false;activeModule=module;requestedModule=module;activeEcuAddr=moduleAddr(module);consecutiveRequestFailures=0;keepaliveMisses=0;lastError="";setStatus("CONNECTING - "+moduleName(module));releaseKL();delay(cfg.preIdleMs);pinMode(TX_PIN,OUTPUT);digitalWrite(TX_PIN,gpioForKLow());delayMicroseconds(25000);digitalWrite(TX_PIN,gpioForKHigh());delayMicroseconds(25000);uartOn();flushRx();uint8_t startPayload[1]={0x81},tx[16];size_t tn=buildKwpFrame(startPayload,1,tx,sizeof(tx));sendSpacedBytes(tx,tn);uint8_t raw[256],frame[128];size_t fn=0;size_t rn=readUntilEcuFrame(raw,sizeof(raw),frame,fn,sizeof(frame),900);lastRxHex=bytesHex(raw,rn);logx(rn?"START RX RAW "+lastRxHex:"START RX RAW <nothing>");if(!rn||!fn){lastError="No valid StartCommunication response from "+moduleName(module);logx("START RX ECU <none>");activity("Connection failed: "+lastError+(rn?"; raw RX "+lastRxHex:"; no RX bytes"));setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START RX ECU "+bytesHex(frame,fn));const uint8_t*rp=nullptr;size_t rpn=0;if(!responsePayload(frame,fn,rp,rpn)||rpn<1||rp[0]!=0xC1){lastError="Unexpected StartCommunication response: "+bytesHex(frame,fn);logx("START response rejected; expected positive service C1");activity("Connection failed: "+lastError);setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START response accepted: positive service C1 from 0x"+hex2(moduleAddr(module)));activity("StartCommunication accepted by "+moduleName(module)+": "+bytesHex(frame,fn));lastRxHex=bytesHex(frame,fn);lastGoodTrafficMs=millis();p3ReadyAtMs=millis()+cfg.p3MinMs;diagnosticSession=true;cr2Connected=(module==MOD_ENGINE);keepaliveMisses=0;if(module==MOD_EGS)readEgsIdentification();if(module==MOD_HZR){livePolling=false;lastError="";activity("HZRKL connected; fan status is read on demand.");setStatus("CONNECTED - HVAC / HZRKL");busy=false;return true;}if(module==MOD_ABS){livePolling=true;nextPollMs=millis()+80;lastError="";activity("ABS StartCommunication accepted. C1 key bytes 43 46 select LETCS framing; verified wheel-speed polling 2A 01 01 enabled.");setStatus("CONNECTED - ABS KWFB/LETCS");busy=false;return true;}activity("Connected to "+moduleName(module)+". Live polling started.");setStatus("CONNECTED - "+moduleName(module));livePolling=true;nextPollMs=millis()+80;busy=false;return true;}
 bool connectModule(ModuleId module){
   if(!selectRelayForModule(module)){setStatus("K-LINE CHANNEL ERROR");return false;}
-  if(module==MOD_ENGINE){bool ok=connectCR2();if(ok){activeModule=MOD_ENGINE;activeEcuAddr=0x12;requestedModule=MOD_ENGINE;livePolling=true;nextPollMs=millis()+80;}else allRelaysOff();return ok;}
+  if(module==MOD_ENGINE){
+    // Try a direct CR2 StartCommunication first. Verify a real 21 12 live reply
+    // before replacing the known-good full Autel replay.
+    activity("Trying short CR2 fast-init; will fall back automatically if unsupported.");
+    bool fast=connectFastModule(MOD_ENGINE);
+    if(fast){
+      livePolling=false;
+      if(cfg.sendPostC1)sendPostC1Request(); // optional session handoff
+      const uint8_t req[]={0x21,0x12};
+      uint8_t resp[256];size_t rn=0;const uint8_t *p=nullptr;size_t pn=0;
+      if(sendKwpPayload(req,sizeof(req),resp,rn,900)
+         &&responsePayload(resp,rn,p,pn)&&pn>=3&&p[0]==0x61&&p[1]==0x12){
+        activity("Short CR2 initialization VERIFIED by successful 21 12 live-data reply.");
+        livePolling=true;nextPollMs=millis()+80;lastError="";
+        setStatus("CONNECTED - CR2 (QUICK INIT)");
+        return true;
+      }
+      activity("Short CR2 init did not pass live-data verification; using proven replay.");
+    }else activity("Short CR2 init not accepted; using proven replay.");
+    // Recovery path preserves the existing, vehicle-verified 34-second startup.
+    allRelaysOff();
+    if(!selectRelayForModule(MOD_ENGINE)){setStatus("K-LINE CHANNEL ERROR");return false;}
+    bool ok=connectCR2();
+    if(ok){activeModule=MOD_ENGINE;activeEcuAddr=0x12;requestedModule=MOD_ENGINE;livePolling=true;nextPollMs=millis()+80;}
+    else allRelaysOff();
+    return ok;
+  }
   bool ok=connectFastModule(module);if(!ok)allRelaysOff();return ok;
 }
 bool absPayload(uint8_t group,const uint8_t*frame,size_t fn,const uint8_t*&p,size_t&pn){if(!responsePayload(frame,fn,p,pn)||pn<3)return false;return p[0]==0x6A&&p[1]==0x01&&p[2]==group;}
