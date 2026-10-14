@@ -29,7 +29,7 @@ static HistoryRing hRings[3]={
 };
 static bool hReady=false;
 static String hError;
-static uint32_t hLastTick=0,hLastFlush=0;
+static uint32_t hLastTick=0,hLastFlush=0,hNextWriteRetryMs=0;
 static int hLastModule=-1;
 
 struct HistorySensor {
@@ -86,14 +86,30 @@ bool historyRead(HistoryRing &r,uint16_t slot,HistoryRecord &record){
 }
 bool historyWrite(HistoryRing &r,uint16_t slot,HistoryRecord &record,bool advance){
   if(!hReady)return false;
-  File f=SPIFFS.open(r.path,"r+");
-  if(!f)f=SPIFFS.open(r.path,"w+");
-  if(!f){hError="Cannot open flash history journal";return false;}
+  // A failed journal previously retried every second for every PID, starving K-line polling.
+  // Back off on flash errors; keep RAM live data available.
+  if((int32_t)(millis()-hNextWriteRetryMs)<0)return false;
+  // SPIFFS append creates a new journal and extends it without seeking beyond EOF.
+  // Existing/full ring slots use r+ for in-place replacement.
+  bool append=advance && slot==r.used && r.used<r.capacity;
+  File f=SPIFFS.open(r.path,append?"a":"r+");
+  if(!f && slot==0 && r.used==0)f=SPIFFS.open(r.path,"w");
+  if(!f){
+    hError="Cannot open flash history journal: "+String(r.path);
+    hNextWriteRetryMs=millis()+30000;
+    return false;
+  }
   record.checksum=historyChecksum(record);
-  bool ok=f.seek((size_t)slot*sizeof(record),SeekSet)
-    &&f.write((const uint8_t*)&record,sizeof(record))==sizeof(record);
+  bool positioned=append || f.seek((size_t)slot*sizeof(record),SeekSet);
+  size_t written=positioned?f.write((const uint8_t*)&record,sizeof(record)):0;
   f.flush();f.close();
-  if(!ok){hError="Flash history write failed";return false;}
+  if(written!=sizeof(record)){
+    hError="Flash history write failed: "+String(r.path)+" ("+String(written)+"/"+String(sizeof(record))+" bytes)";
+    hNextWriteRetryMs=millis()+30000;
+    return false;
+  }
+  hError="";
+  hNextWriteRetryMs=0;
   if(advance){
     if(r.used<r.capacity)r.used++;
     r.next=(slot+1)%r.capacity;
