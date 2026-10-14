@@ -113,7 +113,7 @@ String engineExpected(const char*id){
   return"";
 }
 String engineHealth(const char*id,const ValueState&v){
-  if(!v.valid||stale(v,6000))return"stale";
+  if(!v.valid||stale(v))return"stale";
   String k=id;
   if(k=="coolant"){if(v.value>115)return"bad";if(v.value>105)return"warn";return"neutral";}
   if(k=="oilTemp"){if(v.value>130)return"bad";if(v.value>120)return"warn";return"neutral";}
@@ -125,7 +125,7 @@ String engineHealth(const char*id,const ValueState&v){
 String valueJson(const char*id,const char*label,const ValueState&v){
   String expected=activeModule==MOD_ENGINE?engineExpected(id):"";
   String state=activeModule==MOD_ENGINE?engineHealth(id,v):(stale(v)?"stale":"neutral");
-  return"{\"id\":\""+String(id)+"\",\"label\":\""+String(label)+"\",\"value\":\""+jsonEscape(v.text)+"\",\"unit\":\""+jsonEscape(v.unit)+"\",\"valid\":"+String(v.valid?1:0)+",\"stale\":"+String(stale(v)?1:0)+",\"state\":\""+state+"\",\"expected\":\""+jsonEscape(expected)+"\"}";
+  return"{\"id\":\""+String(id)+"\",\"label\":\""+String(label)+"\",\"value\":\""+jsonEscape(v.text)+"\",\"unit\":\""+jsonEscape(v.unit)+"\",\"valid\":"+String(v.valid?1:0)+",\"sampleMs\":"+String(v.updatedMs)+",\"ageMs\":"+String(v.valid?(uint32_t)(millis()-v.updatedMs):0)+",\"stale\":"+String(stale(v)?1:0)+",\"state\":\""+state+"\",\"expected\":\""+jsonEscape(expected)+"\"}";
 }
 void historyObserve(const char *id,const ValueState &v);
 String sensorsJson(bool captureOnly=false){
