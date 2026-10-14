@@ -65,13 +65,15 @@ jobs:
           cp "$FULL_BIN" dist/firmware-full.bin
           sha256sum dist/firmware.bin | awk '{print $1}' > dist/firmware.sha256
           python3 - <<'PY'
-          import datetime, json, os, pathlib, re
+          import datetime, json, os, pathlib, re, shutil
           sha=pathlib.Path('dist/firmware.sha256').read_text().strip()
           repo=os.environ['GITHUB_REPOSITORY']; commit=os.environ['GITHUB_SHA']
           source=pathlib.Path('firmware/t1n_obd/t1n_obd.ino').read_text()
           m=re.search(r'FIRMWARE_VERSION\s*=\s*"([^"]+)"',source)
           version=m.group(1) if m else commit[:7]
-          manifest={'version':version,'commit':commit,'built_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'firmware_url':f'https://github.com/{repo}/releases/download/latest/firmware.bin','sha256_url':f'https://github.com/{repo}/releases/download/latest/firmware.sha256','sha256':sha,'board':'ESP32 Dev Module','fqbn':'esp32:esp32:esp32:PartitionScheme=min_spiffs'}
+          # Immutable filename per version avoids accidentally selecting a prior download.
+          shutil.copyfile('dist/firmware.bin',f'dist/t1n-{version}.bin')
+          manifest={'version':version,'commit':commit,'built_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'firmware_url':f'https://github.com/{repo}/releases/download/latest/t1n-{version}.bin','sha256_url':f'https://github.com/{repo}/releases/download/latest/firmware.sha256','sha256':sha,'board':'ESP32 Dev Module','fqbn':'esp32:esp32:esp32:PartitionScheme=min_spiffs'}
           pathlib.Path('dist/manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
           PY
       - name: Publish moving latest release
@@ -80,7 +82,7 @@ jobs:
         run: |
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest \
-            dist/firmware.bin dist/firmware-full.bin dist/firmware.sha256 dist/manifest.json \
+            dist/firmware.bin dist/t1n-*.bin dist/firmware-full.bin dist/firmware.sha256 dist/manifest.json \
             --target "$GITHUB_SHA" \
             --title "Latest T1N OBD Firmware" \
             --notes "Automatically built from main at commit $GITHUB_SHA. The latest tag intentionally moves so the ESP32 always has one stable OTA URL."
