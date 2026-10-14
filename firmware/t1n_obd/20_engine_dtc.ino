@@ -47,7 +47,7 @@ String decodeLiveGroup(uint8_t id,const uint8_t*frame,size_t fn){
   if(id==0x18){
     if(have(2,2)){double v=be16(p+2)*0.01;setNum(engEgr,v,"%",1);out+=metricLine("EGR duty",v,"%",2);}
     if(have(4,2)){double v=be16(p+4)*0.01;setNum(engBoostDuty,v,"%",1);out+=metricLine("Boost actuator duty",v,"%",2);}
-    if(have(30,2)){double v=be16(p+30)*0.1;setNum(engRail,v,"bar",1);out+=metricLine("Rail pressure",v,"bar",1);}
+    if(have(30,2)&&be16(p+30)!=0){double v=be16(p+30)*0.1;setNum(engRail,v,"bar",1);out+=metricLine("Rail pressure",v,"bar",1);} // Zero-filled actuator block must not overwrite valid rail pressure from 21 12
   }
 
   if(id==0x20){
