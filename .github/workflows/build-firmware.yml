@@ -43,11 +43,33 @@ jobs:
               "#pragma once\n#define T1N_BUILD_WIFI_PASSWORD " + json.dumps(password) + "\n"
           )
           PY
+      - name: Compress dashboard for limited OTA partitions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import gzip, pathlib, re
+          path=pathlib.Path("firmware/t1n_obd/50_scanner_ui.ino")
+          src=path.read_text()
+          found=re.search(r'String scannerPage\(\)\{return R"HTML\((.*?)\)HTML";\}', src, re.S)
+          if not found:
+              raise SystemExit("Cannot locate dashboard HTML")
+          raw=found.group(1).encode("utf-8")
+          compressed=gzip.compress(raw,compresslevel=9,mtime=0)
+          if len(compressed)>=len(raw):
+              raise SystemExit("Dashboard compression not effective")
+          lines=["#pragma once","#include <Arduino.h>","static const uint8_t SCANNER_UI_GZIP[] PROGMEM = {"]
+          for i in range(0,len(compressed),16):
+              lines.append("  "+", ".join("0x%02x"%v for v in compressed[i:i+16])+",")
+          lines.extend(["};","static const size_t SCANNER_UI_GZIP_LEN = sizeof(SCANNER_UI_GZIP);"])
+          pathlib.Path("firmware/t1n_obd/scanner_ui_gzip_generated.h").write_text("\n".join(lines)+"\n")
+          print("Scanner UI compressed:",len(raw),"->",len(compressed),"bytes; saved",len(raw)-len(compressed))
+          PY
       - name: Compile ESP32 Dev Module with OTA partition
         run: |
           mkdir -p build dist
           arduino-cli compile \
             --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs \
+            --build-property compiler.cpp.extra_flags=-DT1N_USE_GZIP_PAGE \
             --output-dir build \
             firmware/t1n_obd
       - name: Prepare OTA files
@@ -59,6 +81,7 @@ jobs:
             -printf '%s %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
           test -n "$APP_BIN"
           cp "$APP_BIN" dist/firmware.bin
+          test "$(stat -c %s dist/firmware.bin)" -le 1300000 || { echo "OTA image exceeds conservative 1,300,000-byte legacy app-slot limit"; exit 1; }
           # Full flash image for USB installers such as ESPHome Web.
           FULL_BIN="$(find build -maxdepth 1 -type f -name '*.merged.bin' -print -quit)"
           test -n "$FULL_BIN" || { echo "Missing merged flash image"; exit 1; }
