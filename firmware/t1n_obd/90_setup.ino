@@ -68,6 +68,10 @@ String wifiPage(){
   return R"UI(<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>T1N Wi-Fi</title><style>body{font:16px system-ui;background:#091423;color:#f2f6ff;max-width:620px;margin:auto;padding:22px}section{background:#152539;border:1px solid #33506e;border-radius:15px;padding:18px;margin-top:15px}input,button{font:inherit;padding:12px;margin:7px 0;border-radius:9px}input{width:100%;box-sizing:border-box}button{background:#2779e6;color:#fff;border:0}a{color:#9fcaff}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><a href="/">Back to scanner</a><h2>Van Wi-Fi connection</h2><section><pre id="status">Checking...</pre><button onclick="refresh()">Refresh status</button><button onclick="scan()">Scan nearby networks</button><pre id="scanOutput"></pre></section><section><h3>Change Wi-Fi credentials</h3><p>Only use if the built-in AntNet connection fails. Saved settings override the GitHub build credentials.</p><form action="/wifi/save" method="POST"><label>Wi-Fi network<input name="ssid" id="ssid" required maxlength="32"></label><label>Wi-Fi password<input name="password" type="password" required minlength="8" maxlength="63"></label><button type="submit">Save and reconnect</button></form></section><script>async function scan(){let p=document.querySelector("#scanOutput");p.textContent="Scanning...";try{let d=await(await fetch("/api/wifi/scan")).json();p.textContent=d.error?d.error:(d.networks.map(x=>x.ssid+" / "+x.rssi+" dBm / channel "+x.channel).join(String.fromCharCode(10))||"Scan completed: 0 networks");}catch(e){p.textContent="Wi-Fi scan error: "+String(e)}}async function refresh(){try{let d=await(await fetch('/api/wifi',{cache:'no-store'})).json();document.querySelector('#status').textContent='Network: '+d.ssid+'\nSource: '+d.source+'\nWi-Fi: '+d.status+' (code '+d.statusCode+')\nStation IP: '+d.stationIP+'\nSignal: '+d.rssi+' dBm\nPassword configured: '+d.passwordConfigured+' ('+d.passwordLength+' characters)\nAccess point: '+d.apIP+'\nLast event: '+d.lastEvent+'\nDisconnect reason: '+d.disconnectReason+' ('+d.disconnectExplanation+')'+'\nConnection attempts: '+d.connectAttempts+'\nEvent age: '+d.eventAgeSeconds+' seconds';document.querySelector('#ssid').value=d.ssid||'';}catch(e){document.querySelector('#status').textContent='Unable to retrieve status: '+e}}refresh();setInterval(refresh,4000)</script></body></html>)UI";
 }
 
+#ifdef T1N_USE_GZIP_PAGE
+#include "scanner_ui_gzip_generated.h"
+#endif
+
 void setupRoutes(){
 web.on("/wifi",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/html; charset=utf-8",wifiPage());});
 web.on("/api/wifi",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",wifiDiagnosticsJson());});
@@ -88,7 +92,15 @@ web.on("/wifi/save",HTTP_POST,[]{
   web.sendHeader("Location","/wifi",true);web.send(303,"text/plain","Saved; reconnecting");
   WiFi.disconnect();wifiConnectAttempts++;WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
 });
-web.on("/",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/html; charset=utf-8",scannerPage());});
+web.on("/",HTTP_GET,[]{
+  web.sendHeader("Cache-Control","no-store");
+#ifdef T1N_USE_GZIP_PAGE
+  web.sendHeader("Content-Encoding","gzip");
+  web.send_P(200,"text/html; charset=utf-8",(const char*)SCANNER_UI_GZIP,SCANNER_UI_GZIP_LEN);
+#else
+  web.send(200,"text/html; charset=utf-8",scannerPage());
+#endif
+});
 web.on("/advanced",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/html; charset=utf-8",advancedPage());});
 web.on("/update",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store, no-cache, must-revalidate");web.sendHeader("Pragma","no-cache");web.send(200,"text/html; charset=utf-8",updatePage());});
 web.on("/api/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",moduleStatusJson());});
