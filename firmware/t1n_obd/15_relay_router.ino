@@ -39,6 +39,21 @@ bool selectRelayForModule(ModuleId m){
            " RX GPIO"+String(RX_PIN)+" TX GPIO"+String(TX_PIN));
   return true;
 }
+// Passive voltage-logic inspection: READS ONLY RXD and TXD, never drives an ECU output.
+String klineLogicJson(){
+  String s="{\"lines\":[";
+  for(int i=0;i<4;i++){
+    if(i)s+=",";
+    pinMode(K_RX[i],INPUT);
+    s+="{\"obdPin\":"+String(K_OBD[i])+
+       ",\"module\":\""+jsonEscape(moduleName((ModuleId)K_MODULE[i]))+"\""+
+       ",\"rxGpio\":"+String(K_RX[i])+
+       ",\"txGpio\":"+String(K_TX[i])+
+       ",\"rxHigh\":"+String(digitalRead(K_RX[i])==HIGH?1:0)+
+       ",\"txHigh\":"+String(digitalRead(K_TX[i])==HIGH?1:0)+"}";
+  }
+  return s+"]}";
+}
 String relayDiagnosticsJson(){
   String s="{\"activeLow\":0,\"channels\":[";
   for(int i=0;i<4;i++){
