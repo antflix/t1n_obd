@@ -22,6 +22,7 @@ void allRelaysOff() {
 }
 void initRelayRouting(){
   allRelaysOff();
+  for(int i=0;i<4;i++)pinMode(K_RX[i],INPUT_PULLUP); // diagnostic fallback for TLIN1027 open-drain RXD
   selectedKline=-1;
   TX_PIN=K_TX[1];RX_PIN=K_RX[1];
   activity("Four independent TLIN1027 channels initialized (OBD 15/7/9/11); no relays");
@@ -33,7 +34,7 @@ bool selectRelayForModule(ModuleId m){
   TX_PIN=K_TX[idx];
   RX_PIN=K_RX[idx];
   selectedKline=idx;
-  pinMode(RX_PIN,INPUT); // external pull-up installed on TLIN RXD
+  pinMode(RX_PIN,INPUT_PULLUP); // TLIN1027 RXD is open drain; external 1k-10k preferred
   digitalWrite(TX_PIN,HIGH); // recessive idle before any UART activity
   activity("Selected TLIN channel "+String(idx+1)+" OBD"+String(K_OBD[idx])+
            " RX GPIO"+String(RX_PIN)+" TX GPIO"+String(TX_PIN));
@@ -44,7 +45,6 @@ String klineLogicJson(){
   String s="{\"lines\":[";
   for(int i=0;i<4;i++){
     if(i)s+=",";
-    pinMode(K_RX[i],INPUT);
     s+="{\"obdPin\":"+String(K_OBD[i])+
        ",\"module\":\""+jsonEscape(moduleName((ModuleId)K_MODULE[i]))+"\""+
        ",\"rxGpio\":"+String(K_RX[i])+
