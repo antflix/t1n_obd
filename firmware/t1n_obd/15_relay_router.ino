@@ -2,12 +2,13 @@
 // ESP32 UART2 is reassigned to the selected RX/TX GPIO pair; no relays.
 // Each transceiver: RXD pin 1 -> RX GPIO with individual 3.3V pull-up,
 // TXD pin 4 <- TX GPIO, EN pin 2 -> 3.3V, LIN pin 6 -> assigned OBD pin.
-// Channel 2 Engine: RX14 / TX27. Channel 3 ABS: RX26 / TX21 (reassigned from GPIO25).
+// Temporary OBD cross-channel test: chip 1 ABS OBD9 (RX13/TX23), chip 2 EGS OBD11 (RX14/TX27).
+// Chips 3 and 4 have no OBD K-line connected; engine and HVAC are not available.
 // Check all selected pins against the exact ESP32 board variant.
 static const uint8_t K_RX[4]  = {13,14,26,33};
 static const uint8_t K_TX[4]  = {23,27,21,32};
-static const uint8_t K_OBD[4] = {15,7,9,11};
-static const uint8_t K_MODULE[4] = {3,0,1,2}; // HVAC, engine, ABS, EGS
+static const uint8_t K_OBD[4] = {9,11,0,0};
+static const uint8_t K_MODULE[4] = {1,2,255,255}; // ABS, EGS, disconnected, disconnected
 int selectedKline = -1;
 bool relayGpioUsable(uint8_t pin){return pin>=1&&pin<=39;}
 int relayIndexForModule(ModuleId m) {
@@ -25,7 +26,7 @@ void initRelayRouting(){
   for(int i=0;i<4;i++)pinMode(K_RX[i],INPUT_PULLUP); // diagnostic fallback for TLIN1027 open-drain RXD
   selectedKline=-1;
   TX_PIN=K_TX[1];RX_PIN=K_RX[1];
-  activity("Four independent TLIN1027 channels initialized (OBD 15/7/9/11); no relays");
+  activity("Temporary channel swap: ABS=chip1/OBD9, EGS=chip2/OBD11; chips3/4 disconnected");
 }
 bool selectRelayForModule(ModuleId m){
   int idx=relayIndexForModule(m);
@@ -46,7 +47,7 @@ String klineLogicJson(){
   for(int i=0;i<4;i++){
     if(i)s+=",";
     s+="{\"obdPin\":"+String(K_OBD[i])+
-       ",\"module\":\""+jsonEscape(moduleName((ModuleId)K_MODULE[i]))+"\""+
+       ",\"module\":\""+jsonEscape(K_MODULE[i]==255?String("Unconnected"):moduleName((ModuleId)K_MODULE[i]))+"\""+
        ",\"rxGpio\":"+String(K_RX[i])+
        ",\"txGpio\":"+String(K_TX[i])+
        ",\"rxHigh\":"+String(digitalRead(K_RX[i])==HIGH?1:0)+
