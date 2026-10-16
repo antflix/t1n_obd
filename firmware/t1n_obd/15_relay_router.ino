@@ -2,10 +2,10 @@
 // ESP32 UART2 is reassigned to the selected RX/TX GPIO pair; no relays.
 // Each transceiver: RXD pin 1 -> RX GPIO with individual 3.3V pull-up,
 // TXD pin 4 <- TX GPIO, EN pin 2 -> 3.3V, LIN pin 6 -> assigned OBD pin.
-// Chip 2 original wiring: RX14 / TX27.
+// Channel 2 Engine: RX14 / TX27. Channel 3 ABS: RX26 / TX21 (reassigned from GPIO25).
 // Check all selected pins against the exact ESP32 board variant.
 static const uint8_t K_RX[4]  = {13,14,26,33};
-static const uint8_t K_TX[4]  = {23,27,25,32};
+static const uint8_t K_TX[4]  = {23,27,21,32};
 static const uint8_t K_OBD[4] = {15,7,9,11};
 static const uint8_t K_MODULE[4] = {3,0,1,2}; // HVAC, engine, ABS, EGS
 int selectedKline = -1;
