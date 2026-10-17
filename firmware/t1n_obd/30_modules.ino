@@ -106,11 +106,11 @@ bool pollEGSGroup(uint8_t group,bool countFailure=true){uint8_t payload[2]={0x21
   if(countFailure)notePollResult(true);return true;
 }
 String moduleGroupsJson(){
-  String result="{\\"module\\":\\""+jsonEscape(moduleName(activeModule))+"\\",\\"groups\\":[";
+  String result="{\"module\":\""+jsonEscape(moduleName(activeModule))+"\",\"groups\":[";
   if(activeModule==MOD_EGS){
     for(int i=0;i<7;i++){
       if(i)result+=",";
-      result+="{\\"id\\":\\"21 "+hex2(EGS_GROUPS[i])+"\\",\\"raw\\":\\""+jsonEscape(egsGroupLastRaw[i])+"\\",\\"lastMs\\":"+String(egsGroupLastMs[i])+",\\"experimental\\":"+String(i>=5?1:0)+"}";
+      result+="{\"id\":\"21 "+hex2(EGS_GROUPS[i])+"\",\"raw\":\""+jsonEscape(egsGroupLastRaw[i])+"\",\"lastMs\":"+String(egsGroupLastMs[i])+",\"experimental\":"+String(i>=5?1:0)+"}";
     }
   }
   return result+"]}";
@@ -122,11 +122,11 @@ String probeKnownModuleGroup(uint8_t group,bool&ok){
     uint8_t request[]={0x2A,0x01,group},reply[256];size_t count=0;
     // Probe the CBF-defined read request using the existing KWP framing, preserve raw for transport analysis.
     ok=sendKwpPayload(request,sizeof(request),reply,count,900);
-    String info="ABS request 2A 01 "+hex2(group)+" (KWP test framing)\\nRaw RX: "+lastRxHex;
-    if(!ok)info+="\\nResult: "+lastError+"; KWFB framing still requires validation";
+    String info="ABS request 2A 01 "+hex2(group)+" (KWP test framing)\nRaw RX: "+lastRxHex;
+    if(!ok)info+="\nResult: "+lastError+"; KWFB framing still requires validation";
     else{const uint8_t*p=nullptr;size_t pn=0;
-      if(responsePayload(reply,count,p,pn))info+="\\nECU payload: "+bytesHex(p,pn);
-      else info+="\\nResponse parser did not accept the frame";
+      if(responsePayload(reply,count,p,pn))info+="\nECU payload: "+bytesHex(p,pn);
+      else info+="\nResponse parser did not accept the frame";
     }
     activity("ABS read-only probe 2A 01 "+hex2(group)+": "+String(ok?"ECU frame received":"no valid ECU frame")+"; raw "+lastRxHex);
     return info;
@@ -134,7 +134,7 @@ String probeKnownModuleGroup(uint8_t group,bool&ok){
   if(activeModule==MOD_EGS){
     if(egsGroupIndex(group)<0)return "EGS supports read-only groups 30,31,32,33,34,40,54.";
     ok=pollEGSGroup(group,false);
-    return "EGS request 21 "+hex2(group)+"\\nRaw RX: "+lastRxHex+"\\n"+(ok?"Positive group response":"No positive response: "+lastError);
+    return "EGS request 21 "+hex2(group)+"\nRaw RX: "+lastRxHex+"\n"+(ok?"Positive group response":"No positive response: "+lastError);
   }
   return "Select ABS or EGS first.";
 }
