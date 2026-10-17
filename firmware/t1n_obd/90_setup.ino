@@ -77,7 +77,7 @@ web.on("/api/hardware/lines",HTTP_GET,[]{web.sendHeader("Cache-Control","no-stor
 web.on("/api/module/groups",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",moduleGroupsJson());});
 web.on("/api/module/read",HTTP_POST,[]{
   if(!diagnosticSession||busy||jobConnect){web.send(409,"text/plain","Connect the desired module, then stop live polling before probing.");return;}
-  String arg=web.arg("group");if(arg.length()<1||arg.length()>2){web.send(400,"text/plain","Use hex group 01-03 for ABS or 30-34,40,54 for EGS.");return;}
+  String arg=web.arg("group");if(arg.length()<1||arg.length()>2){web.send(400,"text/plain","Use hex group 01-03 for ABS or 30-38,40,54 for EGS.");return;}
   char* endPtr=nullptr;unsigned long id=strtoul(arg.c_str(),&endPtr,16);
   if(!endPtr||*endPtr!=0||id>255){web.send(400,"text/plain","Invalid hex group");return;}
   if((activeModule==MOD_ABS&&(id<1||id>3))||(activeModule==MOD_EGS&&egsGroupIndex((uint8_t)id)<0)
