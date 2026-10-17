@@ -28,7 +28,7 @@ bool readEgsIdentification(){
   activity("EGS variant identified via 30 01 01"+(egsVariantId.length()?": "+egsVariantId:"")+(egsVariantRaw.length()?" · raw "+egsVariantRaw:""));
   lastError="";return true;
 }
-bool connectFastModule(ModuleId module){activity("Connecting to "+moduleName(module)+" at address 0x"+hex2(moduleAddr(module))+" on OBD pin "+String(moduleObdPin(module)));busy=true;livePolling=false;diagnosticSession=false;cr2Connected=false;activeModule=module;requestedModule=module;activeEcuAddr=moduleAddr(module);consecutiveRequestFailures=0;keepaliveMisses=0;lastError="";setStatus("CONNECTING - "+moduleName(module));releaseKL();delay(cfg.preIdleMs);int rxIdle=digitalRead(RX_PIN);pinMode(TX_PIN,OUTPUT);digitalWrite(TX_PIN,gpioForKLow());delayMicroseconds(2000);int rxLow=digitalRead(RX_PIN);delayMicroseconds(23000);digitalWrite(TX_PIN,gpioForKHigh());delayMicroseconds(2000);int rxRelease=digitalRead(RX_PIN);delayMicroseconds(23000);uartOn();flushRx();uint8_t startPayload[1]={0x81},tx[16];size_t tn=buildKwpFrame(startPayload,1,tx,sizeof(tx));sendSpacedBytes(tx,tn);uint8_t raw[256],frame[128];size_t fn=0;size_t rn=readUntilEcuFrame(raw,sizeof(raw),frame,fn,sizeof(frame),900);lastRxHex=bytesHex(raw,rn);activity("K-line RXD levels: idle="+String(rxIdle==HIGH?"HIGH":"LOW")+", driven low="+String(rxLow==HIGH?"HIGH":"LOW")+", released="+String(rxRelease==HIGH?"HIGH":"LOW")+" (RX GPIO"+String(RX_PIN)+", TX GPIO"+String(TX_PIN)+")");logx(rn?"START RX RAW "+lastRxHex:"START RX RAW <nothing>");if(!rn||!fn){lastError="No valid StartCommunication response from "+moduleName(module);logx("START RX ECU <none>");activity("Connection failed: "+lastError+(rn?"; raw RX "+lastRxHex:"; no RX bytes"));setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START RX ECU "+bytesHex(frame,fn));const uint8_t*rp=nullptr;size_t rpn=0;if(!responsePayload(frame,fn,rp,rpn)||rpn<1||rp[0]!=0xC1){lastError="Unexpected StartCommunication response: "+bytesHex(frame,fn);logx("START response rejected; expected positive service C1");activity("Connection failed: "+lastError);setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START response accepted: positive service C1 from 0x"+hex2(moduleAddr(module)));activity("StartCommunication accepted by "+moduleName(module)+": "+bytesHex(frame,fn));lastRxHex=bytesHex(frame,fn);lastGoodTrafficMs=millis();p3ReadyAtMs=millis()+cfg.p3MinMs;diagnosticSession=true;cr2Connected=(module==MOD_ENGINE);keepaliveMisses=0;if(module==MOD_EGS)readEgsIdentification();if(module==MOD_HZR){livePolling=false;lastError="";activity("HZRKL connected; fan status is read on demand.");setStatus("CONNECTED - HVAC / HZRKL");busy=false;return true;}if(module==MOD_ABS){livePolling=true;nextPollMs=millis()+80;lastError="";activity("ABS StartCommunication accepted. C1 key bytes 43 46 select LETCS framing; verified wheel-speed polling 2A 01 01 enabled.");setStatus("CONNECTED - ABS KWFB/LETCS");busy=false;return true;}activity("Connected to "+moduleName(module)+". Live polling started.");setStatus("CONNECTED - "+moduleName(module));livePolling=true;nextPollMs=millis()+80;busy=false;return true;}
+bool connectFastModule(ModuleId module){activity("Connecting to "+moduleName(module)+" at address 0x"+hex2(moduleAddr(module))+" on OBD pin "+String(moduleObdPin(module)));busy=true;livePolling=false;diagnosticSession=false;cr2Connected=false;activeModule=module;requestedModule=module;activeEcuAddr=moduleAddr(module);consecutiveRequestFailures=0;keepaliveMisses=0;lastError="";setStatus("CONNECTING - "+moduleName(module));releaseKL();delay(cfg.preIdleMs);int rxIdle=digitalRead(RX_PIN);pinMode(TX_PIN,OUTPUT);digitalWrite(TX_PIN,gpioForKLow());delayMicroseconds(2000);int rxLow=digitalRead(RX_PIN);delayMicroseconds(23000);digitalWrite(TX_PIN,gpioForKHigh());delayMicroseconds(2000);int rxRelease=digitalRead(RX_PIN);delayMicroseconds(23000);uartOn();flushRx();uint8_t startPayload[1]={0x81},tx[16];size_t tn=buildKwpFrame(startPayload,1,tx,sizeof(tx));sendSpacedBytes(tx,tn);uint8_t raw[256],frame[128];size_t fn=0;size_t rn=readUntilEcuFrame(raw,sizeof(raw),frame,fn,sizeof(frame),900);lastRxHex=bytesHex(raw,rn);activity("K-line RXD levels: idle="+String(rxIdle==HIGH?"HIGH":"LOW")+", driven low="+String(rxLow==HIGH?"HIGH":"LOW")+", released="+String(rxRelease==HIGH?"HIGH":"LOW")+" (RX GPIO"+String(RX_PIN)+", TX GPIO"+String(TX_PIN)+")");logx(rn?"START RX RAW "+lastRxHex:"START RX RAW <nothing>");if(!rn||!fn){lastError="No valid StartCommunication response from "+moduleName(module);logx("START RX ECU <none>");activity("Connection failed: "+lastError+(rn?"; raw RX "+lastRxHex:"; no RX bytes"));setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START RX ECU "+bytesHex(frame,fn));const uint8_t*rp=nullptr;size_t rpn=0;if(!responsePayload(frame,fn,rp,rpn)||rpn<1||rp[0]!=0xC1){lastError="Unexpected StartCommunication response: "+bytesHex(frame,fn);logx("START response rejected; expected positive service C1");activity("Connection failed: "+lastError);setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START response accepted: positive service C1 from 0x"+hex2(moduleAddr(module)));activity("StartCommunication accepted by "+moduleName(module)+": "+bytesHex(frame,fn));lastRxHex=bytesHex(frame,fn);lastGoodTrafficMs=millis();p3ReadyAtMs=millis()+cfg.p3MinMs;diagnosticSession=true;cr2Connected=(module==MOD_ENGINE);keepaliveMisses=0;if(module==MOD_EGS)readEgsIdentification();if(module==MOD_HZR){livePolling=false;lastError="";activity("HZRKL connected; fan status is read on demand.");setStatus("CONNECTED - HVAC / HZRKL");busy=false;return true;}if(module==MOD_ABS){livePolling=false;autoReconnect=false;lastError="";activity("ABS C1 accepted (key bytes 43 46). Polling withheld until KWFB message framing is verified; use the read-only ABS group probe.");setStatus("CONNECTED - ABS KWFB (PROBE ONLY)");busy=false;return true;}activity("Connected to "+moduleName(module)+". Live polling started.");setStatus("CONNECTED - "+moduleName(module));livePolling=true;nextPollMs=millis()+80;busy=false;return true;}
 bool connectModule(ModuleId module){
   if(!selectRelayForModule(module)){setStatus("K-LINE CHANNEL ERROR");return false;}
   if(module==MOD_ENGINE){
@@ -70,7 +70,17 @@ String egsRecognizedGearName(uint8_t x){switch(x){case 0:return"Inactive";case 1
 String egsProgramName(uint8_t x){switch(x){case 0:return"S";case 1:return"W";case 2:return"A";case 3:return"M";default:return"Out of Range";}}
 String egsConverterStatusName(uint8_t x){switch(x){case 0:return"Open";case 1:return"Open -> slipping";case 2:return"Slipping -> open";case 3:return"Slipping";case 4:return"Slipping -> closed";case 5:return"Closed -> slipping";case 6:return"Closed";default:return"Raw "+String(x);}}
 String egsMinMaxGearName(uint8_t x){switch(x){case 0:return"Inactive";case 1:return"1";case 2:return"2";case 3:return"3";case 4:return"4";case 5:return"5";default:return"Raw "+String(x);}}
-bool pollEGSGroup(uint8_t group){uint8_t payload[2]={0x21,group},r[256];size_t rn=0;bool ok=sendKwpPayload(payload,sizeof(payload),r,rn,650);if(!ok){notePollResult(false);return false;}const uint8_t*p=nullptr;size_t pn=0;if(!responsePayload(r,rn,p,pn)||pn<2||p[0]!=0x61||p[1]!=group){lastError="Unexpected EGS response";notePollResult(false);return false;}
+static const uint8_t EGS_GROUPS[]={0x30,0x31,0x32,0x33,0x34,0x40,0x54};
+String egsGroupLastRaw[7];
+uint32_t egsGroupLastMs[7]={0,0,0,0,0,0,0};
+bool egsOptionalGroupSupported[2]={true,true};
+int egsGroupIndex(uint8_t id){for(int i=0;i<7;i++)if(EGS_GROUPS[i]==id)return i;return -1;}
+bool pollEGSGroup(uint8_t group,bool countFailure=true){uint8_t payload[2]={0x21,group},r[256];size_t rn=0;
+  bool ok=sendKwpPayload(payload,sizeof(payload),r,rn,650);int idx=egsGroupIndex(group);
+  if(idx>=0){egsGroupLastRaw[idx]=lastRxHex;egsGroupLastMs[idx]=millis();}
+  if(!ok){if(countFailure)notePollResult(false);return false;}
+  const uint8_t*p=nullptr;size_t pn=0;
+  if(!responsePayload(r,rn,p,pn)||pn<2||p[0]!=0x61||p[1]!=group){lastError="Unexpected EGS response";if(countFailure)notePollResult(false);return false;}
   if(group==0x30&&pn>=24){
     setNum(egsConverterSlip,be16(p+2),"rpm",0);setNum(egsConverterTargetSlip,be16(p+4),"rpm",0);setNum(egsConverterPressure,be16(p+6),"mbar",0);setTxt(egsConverterStatus,egsConverterStatusName(p[8]));
     setTxt(egsSelector,egsSelectorName(p[9]));setTxt(egsProgram,egsProgramName(p[10]));setTxt(egsRecognizedGear,egsRecognizedGearName(p[11]));setTxt(egsGear,egsGearName(p[12]&0x0F));setTxt(egsTargetGear,egsTargetGearName(p[12]&0xF0));
@@ -93,11 +103,51 @@ bool pollEGSGroup(uint8_t group){uint8_t payload[2]={0x21,group},r[256];size_t r
   }else if(group==0x54&&pn>=7){
     setNum(egsCoolant,(double)p[6]-40.0,"°C",0);
   }
-  notePollResult(true);return true;
+  if(countFailure)notePollResult(true);return true;
+}
+String moduleGroupsJson(){
+  String result="{\\"module\\":\\""+jsonEscape(moduleName(activeModule))+"\\",\\"groups\\":[";
+  if(activeModule==MOD_EGS){
+    for(int i=0;i<7;i++){
+      if(i)result+=",";
+      result+="{\\"id\\":\\"21 "+hex2(EGS_GROUPS[i])+"\\",\\"raw\\":\\""+jsonEscape(egsGroupLastRaw[i])+"\\",\\"lastMs\\":"+String(egsGroupLastMs[i])+",\\"experimental\\":"+String(i>=5?1:0)+"}";
+    }
+  }
+  return result+"]}";
+}
+String probeKnownModuleGroup(uint8_t group,bool&ok){
+  ok=false;
+  if(activeModule==MOD_ABS){
+    if(group<1||group>3)return "ABS supports only CBF read-only groups 01, 02, 03.";
+    uint8_t request[]={0x2A,0x01,group},reply[256];size_t count=0;
+    // Probe the CBF-defined read request using the existing KWP framing, preserve raw for transport analysis.
+    ok=sendKwpPayload(request,sizeof(request),reply,count,900);
+    String info="ABS request 2A 01 "+hex2(group)+" (KWP test framing)\\nRaw RX: "+lastRxHex;
+    if(!ok)info+="\\nResult: "+lastError+"; KWFB framing still requires validation";
+    else{const uint8_t*p=nullptr;size_t pn=0;
+      if(responsePayload(reply,count,p,pn))info+="\\nECU payload: "+bytesHex(p,pn);
+      else info+="\\nResponse parser did not accept the frame";
+    }
+    activity("ABS read-only probe 2A 01 "+hex2(group)+": "+String(ok?"ECU frame received":"no valid ECU frame")+"; raw "+lastRxHex);
+    return info;
+  }
+  if(activeModule==MOD_EGS){
+    if(egsGroupIndex(group)<0)return "EGS supports read-only groups 30,31,32,33,34,40,54.";
+    ok=pollEGSGroup(group,false);
+    return "EGS request 21 "+hex2(group)+"\\nRaw RX: "+lastRxHex+"\\n"+(ok?"Positive group response":"No positive response: "+lastError);
+  }
+  return "Select ABS or EGS first.";
 }
 uint8_t absPollIndex=0,egsPollIndex=0;
-void absLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;busy=true;pollABSGroup(1);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
-void egsLivePollTick(){if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;/* AP200 transmission_recording.sr verified these five live-data groups. 21 40/54 remain decodable but are not in the default cycle because Autel did not request them during the complete live-data walkthrough. */static const uint8_t groups[]={0x30,0x31,0x33,0x34,0x30,0x31,0x32};busy=true;pollEGSGroup(groups[egsPollIndex++%(sizeof(groups)/sizeof(groups[0]))]);busy=false;nextPollMs=millis()+cfg.pollIntervalMs;}
+void absLivePollTick(){/* ABS key bytes 43 46 indicate KWFB. Standard KWP framed polling was not accepted. Connection/probe only until transport is verified. */}
+void egsLivePollTick(){
+  if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;
+  // Preserve Autel-verified groups as the normal fast cycle. The CBF-only groups
+  // 40/54 can be tested explicitly using the read-only module-group probe.
+  static const uint8_t groups[]={0x30,0x31,0x33,0x34,0x30,0x31,0x32};
+  busy=true;pollEGSGroup(groups[egsPollIndex++%(sizeof(groups)/sizeof(groups[0]))]);busy=false;
+  nextPollMs=millis()+cfg.pollIntervalMs;
+}
 void livePollTick(){if(activeModule==MOD_ENGINE)engineLivePollTick();else if(activeModule==MOD_ABS)absLivePollTick();else if(activeModule==MOD_EGS)egsLivePollTick();}
 String engineExpected(const char*id){
   String k=id;
