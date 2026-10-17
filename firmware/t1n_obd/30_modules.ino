@@ -70,11 +70,52 @@ String egsRecognizedGearName(uint8_t x){switch(x){case 0:return"Inactive";case 1
 String egsProgramName(uint8_t x){switch(x){case 0:return"S";case 1:return"W";case 2:return"A";case 3:return"M";default:return"Out of Range";}}
 String egsConverterStatusName(uint8_t x){switch(x){case 0:return"Open";case 1:return"Open -> slipping";case 2:return"Slipping -> open";case 3:return"Slipping";case 4:return"Slipping -> closed";case 5:return"Closed -> slipping";case 6:return"Closed";default:return"Raw "+String(x);}}
 String egsMinMaxGearName(uint8_t x){switch(x){case 0:return"Inactive";case 1:return"1";case 2:return"2";case 3:return"3";case 4:return"4";case 5:return"5";default:return"Raw "+String(x);}}
-static const uint8_t EGS_GROUPS[]={0x30,0x31,0x32,0x33,0x34,0x40,0x54};
-String egsGroupLastRaw[7];
-uint32_t egsGroupLastMs[7]={0,0,0,0,0,0,0};
-bool egsOptionalGroupSupported[2]={true,true};
-int egsGroupIndex(uint8_t id){for(int i=0;i<7;i++)if(EGS_GROUPS[i]==id)return i;return -1;}
+static const uint8_t EGS_GROUPS[]={0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x40,0x54};
+String egsGroupLastRaw[11];
+uint32_t egsGroupLastMs[11]={};
+bool egsOdometerSupported=true;
+int egsGroupIndex(uint8_t id){for(int i=0;i<11;i++)if(EGS_GROUPS[i]==id)return i;return -1;}
+struct EgsExtraDef{const char*id;const char*label;};
+static const EgsExtraDef egsExtraDef[]={
+{"starterContact","Starter interlock contact"},
+{"reverseSignal","Reverse input signal"},
+{"starterRelay","Starter interlock relay"},
+{"sol1245Feedback","Shift solenoid 1-2/4-5 feedback"},
+{"sol23Feedback","Shift solenoid 2-3 feedback"},
+{"sol34Feedback","Shift solenoid 3-4 feedback"},
+{"programSwitch","Winter/Summer program switch"},
+{"selectorPlus","Selector plus request"},
+{"selectorMinus","Selector minus request"},
+{"shiftInhibit","Shift inhibit"},
+{"gearSignalOK","Gear selection signal valid"},
+{"engineTccOpen","Engine ECU requests converter clutch open"},
+{"tractionActive","Traction control active"},
+{"gearboxProtectionAck","Gearbox protection acknowledged"},
+{"shiftAbort","Gear shift aborted"},
+{"doubleShift","Double shift in progress"},
+{"converterTested","Converter clutch self-test complete"},
+{"converterTestOK","Converter clutch self-test passed"},
+{"downshiftDeltaRear","Rear downshift speed differential"},
+{"downshiftDeltaFront","Front downshift speed differential"},
+{"pedalDelta","Pedal differential"},
+{"shiftProgramRaw","Shift program status (raw)"},
+{"shiftClassRaw","Shift category (raw)"},
+{"valveFlag","Valve status flag"},
+{"sol1245Command","Solenoid 1-2/4-5 commanded"},
+{"sol23Command","Solenoid 2-3 commanded"},
+{"sol34Command","Solenoid 3-4 commanded"},
+{"sol1245State","Solenoid 1-2/4-5 state"},
+{"sol23State","Solenoid 2-3 state"},
+{"sol34State","Solenoid 3-4 state"},
+{"selectorInputRaw","Selector input status (raw)"},
+{"selectorInput2Raw","Selector input alternate (raw)"},
+{"askSwitchRaw","Drive mode / kickdown inputs (raw)"},
+{"egsdigitalOutputs","EGS digital output state (raw)"}
+};
+static_assert(sizeof(egsExtraDef)/sizeof(egsExtraDef[0])==34,"EGS extra field count");
+void egsBit(int i,uint8_t b,uint8_t mask){setTxt(egsExtra[i],(b&mask)?"On":"Off");}
+void egsRaw(int i,uint8_t b){setNum(egsExtra[i],b,"raw",0);}
+
 bool pollEGSGroup(uint8_t group,bool countFailure=true){uint8_t payload[2]={0x21,group},r[256];size_t rn=0;
   bool ok=sendKwpPayload(payload,sizeof(payload),r,rn,650);int idx=egsGroupIndex(group);
   if(idx>=0){egsGroupLastRaw[idx]=lastRxHex;egsGroupLastMs[idx]=millis();}
@@ -88,16 +129,24 @@ bool pollEGSGroup(uint8_t group,bool countFailure=true){uint8_t payload[2]={0x21
     setNum(egsEngineTorque,be16(p+14),"Nm",0);setNum(egsConvertedTorque,be16(p+16),"Nm",0);setNum(egsOutputRpm,be16(p+18),"rpm",0);
     setTxt(egsKickdown,(p[20]&0x01)?"Active":"Inactive");setTxt(egsDownshift,(p[22]&0x01)?"Active":"Inactive");setTxt(egsUpshift,(p[22]&0x02)?"Active":"Inactive");setTxt(egsTccActive,(p[22]&0x80)?"Active":"Inactive");
     setTxt(egsCurrentFault,(p[23]&0x01)?"Yes":"No");setTxt(egsLimp,(p[23]&0x02)?"Yes":"No");
+    for(int i=0;i<6;i++)egsBit(i,p[20],(uint8_t)(1<<(i+2)));
+    for(int i=0;i<6;i++)egsBit(i+6,p[21],(uint8_t)(1<<i));
+    egsBit(12,p[23],4);egsBit(13,p[23],8);egsBit(14,p[23],64);egsBit(15,p[23],128);
+    if(pn>=26){egsBit(16,p[25],1);egsBit(17,p[25],2);}
   }else if(group==0x31&&pn>=22){
     setNum(egsN2Rpm,be16(p+2),"rpm",0);setNum(egsN3Rpm,be16(p+4),"rpm",0);setNum(egsTurbineRpm,be16(p+6),"rpm",0);setNum(egsEngineRpm,be16(p+8),"rpm",0);
     setNum(egsWheelFLRpm,be16(p+10),"rpm",0);setNum(egsWheelFRRpm,be16(p+12),"rpm",0);setNum(egsWheelRLRpm,be16(p+14),"rpm",0);setNum(egsWheelRRRpm,be16(p+16),"rpm",0);
     setNum(egsVehicleSpeed,be16(p+18)*0.1,"km/h",1);setNum(egsFrontSpeed,be16(p+20)*0.1,"km/h",1);
   }else if(group==0x32&&pn>=14){
     setNum(egsPedal,p[2],"%",0);setNum(egsGrade,be16(p+8)*0.001,"%",3);setTxt(egsMinGear,egsMinMaxGearName(p[12]));setTxt(egsMaxGear,egsMinMaxGearName(p[13]));
+    setNum(egsExtra[18],be16(p+3),"rpm",0);setNum(egsExtra[19],be16(p+5),"rpm",0);
+    setNum(egsExtra[20],p[7],"%",0);egsRaw(21,p[10]);egsRaw(22,p[11]);
   }else if(group==0x33&&pn>=17){
     setNum(egsShiftPressure,be16(p+4),"mbar",0);setNum(egsModPressure,be16(p+6),"mbar",0);setNum(egsShiftCurrentTarget,be16(p+8),"mA",0);setNum(egsShiftCurrentActual,be16(p+10),"mA",0);setNum(egsModCurrentTarget,be16(p+12),"mA",0);setNum(egsModCurrentActual,be16(p+14),"mA",0);setNum(egsTccDuty,p[16],"/255",0);
+    egsBit(23,p[2],1);for(int i=0;i<6;i++)egsBit(i+24,p[3],(uint8_t)(1<<i));
   }else if(group==0x34&&pn>=14){
     setNum(egsBattery,be16(p+2)*0.025,"V",2);setNum(egsAskSupply,be16(p+4)*0.0049,"V",2);setNum(egsSensorSupply,be16(p+6)*0.0075,"V",2);setNum(egsValveSupply,be16(p+8)*0.025,"V",2);
+    egsRaw(30,p[10]);egsRaw(31,p[11]);egsRaw(32,p[12]);egsRaw(33,p[13]);
   }else if(group==0x40&&pn>=4){
     uint16_t raw=be16(p+2);if(raw!=0xFFFF)setNum(egsOdometer,raw*2.0,"km",0);
   }else if(group==0x54&&pn>=7){
@@ -108,7 +157,7 @@ bool pollEGSGroup(uint8_t group,bool countFailure=true){uint8_t payload[2]={0x21
 String moduleGroupsJson(){
   String result="{\"module\":\""+jsonEscape(moduleName(activeModule))+"\",\"groups\":[";
   if(activeModule==MOD_EGS){
-    for(int i=0;i<7;i++){
+    for(int i=0;i<11;i++){
       if(i)result+=",";
       result+="{\"id\":\"21 "+hex2(EGS_GROUPS[i])+"\",\"raw\":\""+jsonEscape(egsGroupLastRaw[i])+"\",\"lastMs\":"+String(egsGroupLastMs[i])+",\"experimental\":"+String(i>=5?1:0)+"}";
     }
@@ -132,7 +181,7 @@ String probeKnownModuleGroup(uint8_t group,bool&ok){
     return info;
   }
   if(activeModule==MOD_EGS){
-    if(egsGroupIndex(group)<0)return "EGS supports read-only groups 30,31,32,33,34,40,54.";
+    if(egsGroupIndex(group)<0)return "EGS read-only groups: 30-38, 40, 54.";
     ok=pollEGSGroup(group,false);
     return "EGS request 21 "+hex2(group)+"\nRaw RX: "+lastRxHex+"\n"+(ok?"Positive group response":"No positive response: "+lastError);
   }
@@ -142,8 +191,14 @@ uint8_t absPollIndex=0,egsPollIndex=0;
 void absLivePollTick(){/* ABS key bytes 43 46 indicate KWFB. Standard KWP framed polling was not accepted. Connection/probe only until transport is verified. */}
 void egsLivePollTick(){
   if(!livePolling||!diagnosticSession||busy||(int32_t)(millis()-nextPollMs)<0)return;
-  // Preserve Autel-verified groups as the normal fast cycle. The CBF-only groups
-  // 40/54 can be tested explicitly using the read-only module-group probe.
+  // Verified on this ECU: 21 40 odometer. Refresh at most once every 90 seconds.
+  static uint32_t lastOdometerAt=0;
+  if(egsOdometerSupported && millis()-lastOdometerAt>=90000){
+    busy=true;bool ok=pollEGSGroup(0x40,false);busy=false;lastOdometerAt=millis();
+    if(!ok){egsOdometerSupported=false;activity("EGS optional 21 40 not accepted; skipped until reboot");}
+    nextPollMs=millis()+cfg.pollIntervalMs;return;
+  }
+  // Use only Autel-recorded groups in the fast cycle; 21 54 returned NRC 12.
   static const uint8_t groups[]={0x30,0x31,0x33,0x34,0x30,0x31,0x32};
   busy=true;pollEGSGroup(groups[egsPollIndex++%(sizeof(groups)/sizeof(groups[0]))]);busy=false;
   nextPollMs=millis()+cfg.pollIntervalMs;
@@ -230,6 +285,7 @@ String sensorsJson(bool captureOnly=false){
     add("shiftPressure","Shift pressure",egsShiftPressure);add("modPressure","Modulating pressure",egsModPressure);add("shiftCurrentTarget","Shift regulator target current",egsShiftCurrentTarget);add("shiftCurrentActual","Shift regulator actual current",egsShiftCurrentActual);add("modCurrentTarget","Modulating regulator target current",egsModCurrentTarget);add("modCurrentActual","Modulating regulator actual current",egsModCurrentActual);add("tccDuty","Converter clutch PWM raw",egsTccDuty);
     add("pedal","Pedal value received by EGS",egsPedal);add("grade","Calculated grade",egsGrade);add("minGear","Minimum permitted gear",egsMinGear);add("maxGear","Maximum permitted gear",egsMaxGear);add("coolant","Coolant temperature received by EGS",egsCoolant);add("odometer","Odometer",egsOdometer);
     add("kickdown","Kickdown",egsKickdown);add("limp","Limp mode",egsLimp);add("currentFault","Current fault flag",egsCurrentFault);add("upshift","Upshift in progress",egsUpshift);add("downshift","Downshift in progress",egsDownshift);add("tccActive","Converter clutch active",egsTccActive);
+    for(int i=0;i<34;i++)add(egsExtraDef[i].id,egsExtraDef[i].label,egsExtra[i]);
   }
   if(!captureOnly)s+="]}";return s;
 }
