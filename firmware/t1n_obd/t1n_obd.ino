@@ -158,6 +158,7 @@ ValueState engCylCorr[5], engCylRpm[5];
 ValueState engIdleTarget, engDiagIdleTarget, engSpeedTarget, engAirMassTarget, engEgrAirMassTarget;
 ValueState engFuelReqADR, engFuelReqFGR, engFuelReqPWG, engFuelReqSync;
 ValueState absWheelFL, absWheelFR, absWheelRL, absWheelRR, absVoltage, absWheelSensorV, absBrakeLamp, absBrakeSwitch, absPump, absOutletFL, absOutletFR;
+ValueState egsCan[26]; // CBF-verified EGS embedded CAN-status data
 ValueState egsExtra[34]; // Additional EGS CBF-defined status, selector and solenoid measurements
 ValueState egsTemp, egsGear, egsTargetGear, egsRecognizedGear, egsSelector, egsProgram, egsConverterStatus, egsOutputRpm, egsTurbineRpm, egsN2Rpm, egsN3Rpm, egsEngineRpm, egsWheelFLRpm, egsWheelFRRpm, egsWheelRLRpm, egsWheelRRRpm, egsVehicleSpeed, egsFrontSpeed, egsBattery, egsSensorSupply, egsAskSupply, egsValveSupply, egsConverterSlip, egsConverterTargetSlip, egsConverterPressure, egsEngineTorque, egsConvertedTorque, egsModPressure, egsShiftPressure, egsModCurrentActual, egsModCurrentTarget, egsShiftCurrentActual, egsShiftCurrentTarget, egsTccDuty, egsPedal, egsGrade, egsMinGear, egsMaxGear, egsCoolant, egsOdometer, egsKickdown, egsLimp, egsCurrentFault, egsUpshift, egsDownshift, egsTccActive;
 
