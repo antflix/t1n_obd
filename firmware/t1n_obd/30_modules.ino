@@ -113,8 +113,41 @@ static const EgsExtraDef egsExtraDef[]={
 {"egsdigitalOutputs","EGS digital output state (raw)"}
 };
 static_assert(sizeof(egsExtraDef)/sizeof(egsExtraDef[0])==34,"EGS extra field count");
-void egsBit(int i,uint8_t b,uint8_t mask){setTxt(egsExtra[i],(b&mask)?"On":"Off");}
+void egsBit(int i,uint8_t b,uint8_t mask){
+  ValueState &v=egsExtra[i];v.value=(b&mask)?1:0;v.text=v.value?"On":"Off";v.unit="";v.valid=true;v.updatedMs=millis();
+}
 void egsRaw(int i,uint8_t b){setNum(egsExtra[i],b,"raw",0);}
+static const EgsExtraDef egsCanDef[]={
+{"can230Ewm","CAN 0x230 EWM status (raw)"},
+{"can608Status","CAN 0x608 TCS status (raw)"},
+{"can218Transmit","CAN 0x218 transmission (raw)"},
+{"can218Manufacturer","CAN 0x218 manufacturer (raw)"},
+{"can218Engine","CAN 0x218 engine data (raw)"},
+{"can218GearCode","CAN 0x218 gear code (raw)"},
+{"can218Status1","CAN 0x218 status 1 (raw)"},
+{"can218Status2","CAN 0x218 status 2 (raw)"},
+{"can218Kickdown","CAN 0x218 kickdown flag"},
+{"can218Status3","CAN 0x218 status 3 (raw)"},
+{"can218FF","CAN 0x218 FF byte (raw)"},
+{"can218FaultCode","CAN 0x218 fault/code byte (raw)"},
+{"can418Byte1","CAN 0x418 first byte (raw)"},
+{"can418Transmit","CAN 0x418 transmission (raw)"},
+{"can418Flags","CAN 0x418 selector flags (raw)"},
+{"can418ActualGear","CAN 0x418 actual gear nibble (raw)"},
+{"can418TargetGear","CAN 0x418 target gear nibble (raw)"},
+{"can418FuelControl","CAN 0x418 fuel control (raw)"},
+{"can418TempRaw","CAN 0x418 temperature data (raw)"},
+{"can418Status1","CAN 0x418 status 1 (raw)"},
+{"can418GearCode","CAN 0x418 gear code (raw)"},
+{"can418TorqueLoss","CAN 0x418 torque loss (raw)"},
+{"can418Status2","CAN 0x418 status 2 (raw)"},
+{"can418WheelFactor","CAN 0x418 wheel factor (raw)"},
+{"can338Transmit","CAN 0x338 transmission (raw)"},
+{"can338OutputSpeed","CAN 0x338 output speed (raw)"}
+};
+static_assert(sizeof(egsCanDef)/sizeof(egsCanDef[0])==26,"EGS CAN field count");
+void egsCanNum(int i,uint16_t raw){setNum(egsCan[i],raw,"raw",0);}
+
 
 bool pollEGSGroup(uint8_t group,bool countFailure=true){uint8_t payload[2]={0x21,group},r[256];size_t rn=0;
   bool ok=sendKwpPayload(payload,sizeof(payload),r,rn,650);int idx=egsGroupIndex(group);
@@ -147,6 +180,18 @@ bool pollEGSGroup(uint8_t group,bool countFailure=true){uint8_t payload[2]={0x21
   }else if(group==0x34&&pn>=14){
     setNum(egsBattery,be16(p+2)*0.025,"V",2);setNum(egsAskSupply,be16(p+4)*0.0049,"V",2);setNum(egsSensorSupply,be16(p+6)*0.0075,"V",2);setNum(egsValveSupply,be16(p+8)*0.025,"V",2);
     egsRaw(30,p[10]);egsRaw(31,p[11]);egsRaw(32,p[12]);egsRaw(33,p[13]);
+  }else if(group==0x35&&pn>=4){
+    egsCanNum(0,p[2]);egsCanNum(1,p[3]);
+  }else if(group==0x36&&pn>=11){
+    for(int i=0;i<6;i++)egsCanNum(2+i,p[2+i]);
+    egsCanNum(8,p[7]&1);
+    for(int i=0;i<3;i++)egsCanNum(9+i,p[8+i]);
+  }else if(group==0x37&&pn>=11){
+    egsCanNum(12,p[2]);egsCanNum(13,p[2]);egsCanNum(14,p[3]);
+    egsCanNum(15,p[3]&0x0F);egsCanNum(16,(p[3]>>4)&0x0F);
+    for(int i=0;i<7;i++)egsCanNum(17+i,p[4+i]);
+  }else if(group==0x38&&pn>=5){
+    egsCanNum(24,p[2]);egsCanNum(25,be16(p+3));
   }else if(group==0x40&&pn>=4){
     uint16_t raw=be16(p+2);if(raw!=0xFFFF)setNum(egsOdometer,raw*2.0,"km",0);
   }else if(group==0x54&&pn>=7){
@@ -199,6 +244,18 @@ void egsLivePollTick(){
     nextPollMs=millis()+cfg.pollIntervalMs;return;
   }
   // Use only Autel-recorded groups in the fast cycle; 21 54 returned NRC 12.
+  // All four additional CAN-status groups responded positively on this EGS variant.
+  static uint32_t lastCanAt=0;static uint8_t canCycle=0;
+  static bool canEnabled[4]={true,true,true,true};
+  if(millis()-lastCanAt>=4000){
+    uint8_t index=canCycle++%4;
+    lastCanAt=millis();
+    if(canEnabled[index]){
+      busy=true;bool ok=pollEGSGroup((uint8_t)(0x35+index),false);busy=false;
+      if(!ok){canEnabled[index]=false;activity("EGS optional 21 "+hex2(0x35+index)+" rejected; skipping");}
+    }
+    nextPollMs=millis()+cfg.pollIntervalMs;return;
+  }
   static const uint8_t groups[]={0x30,0x31,0x33,0x34,0x30,0x31,0x32};
   busy=true;pollEGSGroup(groups[egsPollIndex++%(sizeof(groups)/sizeof(groups[0]))]);busy=false;
   nextPollMs=millis()+cfg.pollIntervalMs;
@@ -286,6 +343,7 @@ String sensorsJson(bool captureOnly=false){
     add("pedal","Pedal value received by EGS",egsPedal);add("grade","Calculated grade",egsGrade);add("minGear","Minimum permitted gear",egsMinGear);add("maxGear","Maximum permitted gear",egsMaxGear);add("coolant","Coolant temperature received by EGS",egsCoolant);add("odometer","Odometer",egsOdometer);
     add("kickdown","Kickdown",egsKickdown);add("limp","Limp mode",egsLimp);add("currentFault","Current fault flag",egsCurrentFault);add("upshift","Upshift in progress",egsUpshift);add("downshift","Downshift in progress",egsDownshift);add("tccActive","Converter clutch active",egsTccActive);
     for(int i=0;i<34;i++)add(egsExtraDef[i].id,egsExtraDef[i].label,egsExtra[i]);
+    for(int i=0;i<26;i++)add(egsCanDef[i].id,egsCanDef[i].label,egsCan[i]);
   }
   if(!captureOnly)s+="]}";return s;
 }
