@@ -41,7 +41,7 @@ int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.10.10-swap-abs-egs";
+static const char* FIRMWARE_VERSION = "1.10.11-module-probes";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
