@@ -74,6 +74,17 @@ String wifiPage(){
 
 void setupRoutes(){
 web.on("/api/hardware/lines",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",klineLogicJson());});
+web.on("/api/module/groups",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",moduleGroupsJson());});
+web.on("/api/module/read",HTTP_POST,[]{
+  if(!diagnosticSession||busy||jobConnect){web.send(409,"text/plain","Connect the desired module, then stop live polling before probing.");return;}
+  String arg=web.arg("group");if(arg.length()<1||arg.length()>2){web.send(400,"text/plain","Use hex group 01-03 for ABS or 30-34,40,54 for EGS.");return;}
+  char* endPtr=nullptr;unsigned long id=strtoul(arg.c_str(),&endPtr,16);
+  if(!endPtr||*endPtr!=0||id>255){web.send(400,"text/plain","Invalid hex group");return;}
+  if((activeModule==MOD_ABS&&(id<1||id>3))||(activeModule==MOD_EGS&&egsGroupIndex((uint8_t)id)<0)
+    ||(activeModule!=MOD_ABS&&activeModule!=MOD_EGS)){web.send(400,"text/plain","Group unsupported for selected module");return;}
+  busy=true;bool ok=false;String result=probeKnownModuleGroup((uint8_t)id,ok);busy=false;
+  web.send(ok?200:422,"text/plain; charset=utf-8",result);
+});
 web.on("/wifi",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/html; charset=utf-8",wifiPage());});
 web.on("/api/wifi",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",wifiDiagnosticsJson());});
 web.on("/api/wifi/scan",HTTP_GET,[]{
