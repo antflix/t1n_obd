@@ -45,7 +45,7 @@ jobs:
           PY
       - name: Install deterministic asset compressors
         run: |
-          npm install --no-save --ignore-scripts --no-audit --no-fund terser@5.39.0
+          npm install --no-save --ignore-scripts --no-audit --no-fund terser@5.39.0 clean-css-cli@5.6.3
           python3 -m pip install --quiet zopfli==0.4.2
       - name: Compress dashboard for limited OTA partitions
         shell: bash
@@ -59,6 +59,12 @@ jobs:
               js=subprocess.run(['./node_modules/.bin/terser','--compress','--mangle'],
                                 input=match.group(2),text=True,capture_output=True,check=True).stdout.strip()
               html=html[:match.start(2)]+js+html[match.end(2):]
+              css_match=re.search(r'(<style>)(.*?)(</style>)',html,re.S)
+              if css_match:
+                  css=subprocess.run(['./node_modules/.bin/cleancss','--level','2'],
+                                     input=css_match.group(2),text=True,capture_output=True,check=True).stdout.strip()
+                  html=html[:css_match.start(2)]+css+html[css_match.end(2):]
+              html=re.sub(r'>\s+<','><',html)
               raw=html.encode('utf-8')
               return raw,zopfli.gzip.compress(raw,numiterations=15)
           path=pathlib.Path("firmware/t1n_obd/50_scanner_ui.ino")
