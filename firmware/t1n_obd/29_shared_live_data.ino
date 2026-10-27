@@ -13,7 +13,9 @@ static const SharedLiveGroup sharedLiveGroups[]={
  {MOD_HZR,0x21,0x61,0,2,"HVAC optional setpoint/voltage",false},
  {MOD_HZR,0x21,0x63,0,2,"HVAC optional refrigerant pressure",false},
  {MOD_HZR,0x21,0xE0,0,2,"HVAC optional internal values",false},
- {MOD_EWM,0xA1,0,0,1,"EWM status/fault record (raw, meaning unverified)",true},
+ {MOD_EWM,0x2A,0x01,0x01,3,"EWM selector and switch measurements",true},
+ {MOD_EWM,0x2A,0x01,0x02,3,"EWM potentiometers and learned positions",true},
+ {MOD_EWM,0xA1,0,0,1,"EWM fault/status record (raw, on-demand)",false},
  {MOD_EWM,0x3C,0x00,0,2,"EWM identification/production data (read once)",false}
 };
 static const int SHARED_GROUP_COUNT=sizeof(sharedLiveGroups)/sizeof(sharedLiveGroups[0]);
@@ -27,6 +29,70 @@ struct SharedGroupData {
 SharedGroupData sharedGroupData[SHARED_GROUP_COUNT];
 ValueState kiFuelLitres,kiOutsideTemp,kiDimmer,kiSpeed,kiSenderOhms;
 ValueState hzTemp[6],hzSwitch[6],hzStatus[12];
+
+// These positions are copied from the ORIGINAL EWM210.cbf DT_* service objects,
+// not inferred from the values observed on this stationary vehicle.
+// Bit positions are measured from the first positive-response service byte
+// (6A=bit 0); kind: 0=raw8, 1=flag, 2=raw16 BE, 3=19mV/count, 4=69mV/count.
+struct EwmFieldDef{uint8_t group,bit,kind;const char *id,*label;};
+static const EwmFieldDef ewmFieldDefs[]={
+ {1,16,0,"ewmSelector","Selector position (raw enum)"},
+ {1,24,0,"ewmSupplyRaw","Supply voltage (raw)"},
+ {1,32,1,"ewmKickdown","Kickdown switch"},
+ {1,33,0,"ewmProgram","Winter/Summer program (raw enum)"},
+ {1,34,1,"ewmPlus","Selector + switch"},
+ {1,35,1,"ewmMinus","Selector - switch"},
+ {1,36,1,"ewmReverseKL15","Reverse-light terminal 15"},
+ {1,37,1,"ewmReverse","Reverse-light output"},
+ {1,40,1,"ewmLockActual","Shift-lock solenoid actual"},
+ {1,41,1,"ewmLockTarget","Shift-lock solenoid commanded"},
+ {1,46,1,"ewmShiftlock","Shift-lock state"},
+ {1,48,0,"ewmCan230","CAN 0x230 raw status"},
+ {1,56,2,"ewmFilteredRear","Rear speed filtered (raw16)"},
+ {1,72,2,"ewmWheelRR","Right rear wheel CAN speed (raw16)"},
+ {1,88,2,"ewmWheelRL","Left rear wheel CAN speed (raw16)"},
+ {1,104,0,"ewmHw","Hardware version raw"},
+ {1,112,0,"ewmVariant","Variant raw"},
+ {1,120,0,"ewmSw","Software version raw"},
+ {1,128,0,"ewmData","Data version raw"},
+ {1,136,2,"ewmBrakeTorque","Brake torque CAN raw16"},
+ {1,144,1,"ewmDriverBrake","Driver brake signal"},
+ {1,150,1,"ewmBrake","Brake input"},
+ {2,16,0,"ewmPotAngle","Potentiometer angle raw"},
+ {2,16,3,"ewmPotV","Potentiometer voltage"},
+ {2,24,4,"ewmLockV","Shift-lock analog voltage"},
+ {2,32,4,"ewmKickV","Kickdown analog voltage"},
+ {2,40,0,"ewmRestD","D default/rest angle raw"},
+ {2,48,0,"ewmMaxLearn","Maximum learned range raw"},
+ {2,56,0,"ewmUpperP","P upper learned limit"},
+ {2,64,0,"ewmLowerP","P lower learned limit"},
+ {2,72,0,"ewmUpperR","R upper learned limit"},
+ {2,80,0,"ewmLowerR","R lower learned limit"},
+ {2,88,0,"ewmUpperN","N upper learned limit"},
+ {2,96,0,"ewmLowerN","N lower learned limit"},
+ {2,104,0,"ewmUpperD","D upper learned limit"},
+ {2,112,0,"ewmLowerD","D lower learned limit"},
+ {2,120,3,"ewmPotFaultV","Potentiometer fault-check voltage"},
+ {2,128,3,"ewmPotSupplyV","Potentiometer supply voltage"},
+ {2,136,0,"ewmReverseFeedback","Reverse light output feedback raw"},
+ {2,144,0,"ewmLockFeedback","Shift-lock feedback raw"},
+ {2,152,0,"ewmPotErrors","Potentiometer wiper error count"}
+};
+static const int EWM_FIELD_COUNT=sizeof(ewmFieldDefs)/sizeof(ewmFieldDefs[0]);
+ValueState ewmFields[EWM_FIELD_COUNT];
+void decodeEwmGroup(uint8_t group,const uint8_t *p,size_t n){
+  if(n<20||p[0]!=0x6A||p[1]!=group)return;
+  for(int i=0;i<EWM_FIELD_COUNT;i++){
+    const EwmFieldDef &f=ewmFieldDefs[i];if(f.group!=group)continue;
+    unsigned byte=f.bit/8,shift=f.bit%8;
+    if(byte>=n)continue;
+    if(f.kind==1)setTxt(ewmFields[i],(p[byte]&(1U<<shift))?"On":"Off");
+    else if(f.kind==2){if(byte+1<n)setNum(ewmFields[i],((uint16_t)p[byte]<<8)|p[byte+1],"raw16",0);}
+    else if(f.kind==3)setNum(ewmFields[i],p[byte]*0.019,"V",3);
+    else if(f.kind==4)setNum(ewmFields[i],p[byte]*0.069,"V",3);
+    else setNum(ewmFields[i],p[byte],"raw",0);
+  }
+}
 int sharedPollIndex=0;
 String sharedGroupRequestHex(int i){
   const SharedLiveGroup &g=sharedLiveGroups[i];
@@ -46,13 +112,14 @@ bool readSharedGroup(int idx,bool annotateFailure=true){
     if(p[2]==0x11||p[2]==0x12||p[2]==0x31)s.unsupported=true;
     return false;
   }
-  if(p[0]!=expected || (g.module!=MOD_EWM && p[1]!=(g.module==MOD_KI?g.b:g.a))){s.problem="Unexpected response service/group";s.raw=bytesHex(r,rn);return false;}
+  if(p[0]!=expected || (g.len>1 && p[1]!=(g.len==3?g.b:g.a))){s.problem="Unexpected response service/group";s.raw=bytesHex(r,rn);return false;}
   s.raw=bytesHex(r,rn);s.problem="";s.sampleMs=millis();
   // For 21 GG replies drop 61 GG; for 2A 01 GG replies drop 6A 01,
   // preserve 07 (group identifier when returned) as a visible raw byte.
-  int header=g.module==MOD_EWM?1:2;
+  int header=(g.module==MOD_EWM && g.service==0xA1)?1:2;
   s.count=(uint8_t)min((int)n-header,48);
   for(int j=0;j<s.count;j++)setNum(s.bytes[j],p[j+header],"raw",0);
+  if(g.module==MOD_EWM && g.service==0x2A)decodeEwmGroup(g.b,p,n);
   if(g.module==MOD_HZR && n>=3){
     auto flagState=[&](ValueState &dst,uint8_t mask){setTxt(dst,(p[2]&mask)?"On":"Off");};
     if(g.a==0x60 && n>=8){
@@ -131,7 +198,7 @@ String modulesCatalogJson(){
     out+="{\"id\":"+String(i)+",\"name\":\""+jsonEscape(moduleName(m))+
       "\",\"address\":\"0x"+hex2(moduleAddr(m))+"\",\"obdPin\":"+String(moduleObdPin(m))+
       ",\"channel\":"+String(ch+1)+",\"verified\":true,\"liveCapability\":\""+
-      String(m==MOD_ABS?"transport research":m==MOD_EWM?"read-only raw status, meaning unverified":m==MOD_HZR||m==MOD_KI?"verified groups + raw values":"decoded fields")+"\",\"pollable\":"+
+      String(m==MOD_ABS?"transport research":m==MOD_EWM?"CBF-decoded selectors, inputs, analog data":m==MOD_HZR||m==MOD_KI?"verified groups + raw values":"decoded fields")+"\",\"pollable\":"+
       String(m!=MOD_ABS?"true":"false")+"}";
   }
   return out+"]}";
