@@ -28,7 +28,7 @@ bool readEgsIdentification(){
   activity("EGS variant identified via 30 01 01"+(egsVariantId.length()?": "+egsVariantId:"")+(egsVariantRaw.length()?" · raw "+egsVariantRaw:""));
   lastError="";return true;
 }
-bool connectFastModule(ModuleId module){activity("Connecting to "+moduleName(module)+" at address 0x"+hex2(moduleAddr(module))+" on OBD pin "+String(moduleObdPin(module)));busy=true;livePolling=false;diagnosticSession=false;cr2Connected=false;activeModule=module;requestedModule=module;activeEcuAddr=moduleAddr(module);consecutiveRequestFailures=0;keepaliveMisses=0;lastError="";setStatus("CONNECTING - "+moduleName(module));releaseKL();delay(cfg.preIdleMs);int rxIdle=digitalRead(RX_PIN);pinMode(TX_PIN,OUTPUT);digitalWrite(TX_PIN,gpioForKLow());delayMicroseconds(2000);int rxLow=digitalRead(RX_PIN);delayMicroseconds(23000);digitalWrite(TX_PIN,gpioForKHigh());delayMicroseconds(2000);int rxRelease=digitalRead(RX_PIN);delayMicroseconds(23000);uint8_t startPayload[1]={0x81},tx[16];size_t tn=buildKwpFrame(startPayload,1,tx,sizeof(tx));if(module==MOD_HZR){sendPin15CompensatedFrame(tx,tn);}else{uartOn();flushRx();sendSpacedBytes(tx,tn);}uint8_t raw[256],frame[128];size_t fn=0;size_t rn=module==MOD_HZR?readPin15CompensatedResponse(raw,sizeof(raw),frame,fn,sizeof(frame),900):readUntilEcuFrame(raw,sizeof(raw),frame,fn,sizeof(frame),900);lastRxHex=bytesHex(raw,rn);activity("K-line RXD levels: idle="+String(rxIdle==HIGH?"HIGH":"LOW")+", driven low="+String(rxLow==HIGH?"HIGH":"LOW")+", released="+String(rxRelease==HIGH?"HIGH":"LOW")+" (RX GPIO"+String(RX_PIN)+", TX GPIO"+String(TX_PIN)+")");logx(rn?"START RX RAW "+lastRxHex:"START RX RAW <nothing>");if(!rn||!fn){lastError="No valid StartCommunication response from "+moduleName(module);logx("START RX ECU <none>");activity("Connection failed: "+lastError+(rn?"; raw RX "+lastRxHex:"; no RX bytes"));setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START RX ECU "+bytesHex(frame,fn));const uint8_t*rp=nullptr;size_t rpn=0;if(!responsePayload(frame,fn,rp,rpn)||rpn<1||rp[0]!=0xC1){lastError="Unexpected StartCommunication response: "+bytesHex(frame,fn);logx("START response rejected; expected positive service C1");activity("Connection failed: "+lastError);setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START response accepted: positive service C1 from 0x"+hex2(moduleAddr(module)));activity("StartCommunication accepted by "+moduleName(module)+": "+bytesHex(frame,fn));lastRxHex=bytesHex(frame,fn);lastGoodTrafficMs=millis();p3ReadyAtMs=millis()+cfg.p3MinMs;diagnosticSession=true;cr2Connected=(module==MOD_ENGINE);keepaliveMisses=0;if(module==MOD_EGS)readEgsIdentification();if(module==MOD_HZR){livePolling=false;lastError="";activity("HZRKL connected; fan status is read on demand.");setStatus("CONNECTED - HVAC / HZRKL");busy=false;return true;}if(module==MOD_ABS){livePolling=false;autoReconnect=false;lastError="";activity("ABS C1 accepted (key bytes 43 46). Polling withheld until KWFB message framing is verified; use the read-only ABS group probe.");setStatus("CONNECTED - ABS KWFB (PROBE ONLY)");busy=false;return true;}activity("Connected to "+moduleName(module)+". Live polling started.");setStatus("CONNECTED - "+moduleName(module));livePolling=true;nextPollMs=millis()+80;busy=false;return true;}
+bool connectFastModule(ModuleId module){activity("Connecting to "+moduleName(module)+" at address 0x"+hex2(moduleAddr(module))+" on OBD pin "+String(moduleObdPin(module)));busy=true;livePolling=false;diagnosticSession=false;cr2Connected=false;activeModule=module;requestedModule=module;activeEcuAddr=moduleAddr(module);consecutiveRequestFailures=0;keepaliveMisses=0;lastError="";setStatus("CONNECTING - "+moduleName(module));releaseKL();delay(cfg.preIdleMs);int rxIdle=digitalRead(RX_PIN);pinMode(TX_PIN,OUTPUT);digitalWrite(TX_PIN,gpioForKLow());delayMicroseconds(2000);int rxLow=digitalRead(RX_PIN);delayMicroseconds(23000);digitalWrite(TX_PIN,gpioForKHigh());delayMicroseconds(2000);int rxRelease=digitalRead(RX_PIN);delayMicroseconds(23000);uint8_t startPayload[1]={0x81},tx[16];size_t tn=buildKwpFrame(startPayload,1,tx,sizeof(tx));if(moduleObdPin(module)==15){sendPin15CompensatedFrame(tx,tn);}else{uartOn();flushRx();sendSpacedBytes(tx,tn);}uint8_t raw[256],frame[128];size_t fn=0;size_t rn=moduleObdPin(module)==15?readPin15CompensatedResponse(raw,sizeof(raw),frame,fn,sizeof(frame),900):readUntilEcuFrame(raw,sizeof(raw),frame,fn,sizeof(frame),900);lastRxHex=bytesHex(raw,rn);activity("K-line RXD levels: idle="+String(rxIdle==HIGH?"HIGH":"LOW")+", driven low="+String(rxLow==HIGH?"HIGH":"LOW")+", released="+String(rxRelease==HIGH?"HIGH":"LOW")+" (RX GPIO"+String(RX_PIN)+", TX GPIO"+String(TX_PIN)+")");logx(rn?"START RX RAW "+lastRxHex:"START RX RAW <nothing>");if(!rn||!fn){lastError="No valid StartCommunication response from "+moduleName(module);logx("START RX ECU <none>");activity("Connection failed: "+lastError+(rn?"; raw RX "+lastRxHex:"; no RX bytes"));setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START RX ECU "+bytesHex(frame,fn));const uint8_t*rp=nullptr;size_t rpn=0;if(!responsePayload(frame,fn,rp,rpn)||rpn<1||rp[0]!=0xC1){lastError="Unexpected StartCommunication response: "+bytesHex(frame,fn);logx("START response rejected; expected positive service C1");activity("Connection failed: "+lastError);setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START response accepted: positive service C1 from 0x"+hex2(moduleAddr(module)));activity("StartCommunication accepted by "+moduleName(module)+": "+bytesHex(frame,fn));lastRxHex=bytesHex(frame,fn);lastGoodTrafficMs=millis();p3ReadyAtMs=millis()+cfg.p3MinMs;diagnosticSession=true;cr2Connected=(module==MOD_ENGINE);keepaliveMisses=0;if(module==MOD_EGS)readEgsIdentification();if(module==MOD_HZR||module==MOD_KI||module==MOD_EWM){livePolling=(module!=MOD_EWM);nextPollMs=millis()+150;lastError="";activity(moduleName(module)+" connected; verified read-only data groups available.");setStatus("CONNECTED - "+moduleName(module));busy=false;return true;}if(module==MOD_ABS){livePolling=false;autoReconnect=false;lastError="";activity("ABS C1 accepted (key bytes 43 46). Polling withheld until KWFB message framing is verified; use the read-only ABS group probe.");setStatus("CONNECTED - ABS KWFB (PROBE ONLY)");busy=false;return true;}activity("Connected to "+moduleName(module)+". Live polling started.");setStatus("CONNECTED - "+moduleName(module));livePolling=true;nextPollMs=millis()+80;busy=false;return true;}
 bool connectModule(ModuleId module){
   if(!selectRelayForModule(module)){setStatus("K-LINE CHANNEL ERROR");return false;}
   if(module==MOD_ENGINE){
@@ -207,6 +207,7 @@ String moduleGroupsJson(){
       result+="{\"id\":\"21 "+hex2(EGS_GROUPS[i])+"\",\"raw\":\""+jsonEscape(egsGroupLastRaw[i])+"\",\"lastMs\":"+String(egsGroupLastMs[i])+",\"experimental\":"+String(i>=5?1:0)+"}";
     }
   }
+  if(activeModule==MOD_HZR||activeModule==MOD_KI||activeModule==MOD_EWM)return sharedGroupCatalogJson();
   return result+"]}";
 }
 String probeKnownModuleGroup(uint8_t group,bool&ok){
@@ -260,7 +261,7 @@ void egsLivePollTick(){
   busy=true;pollEGSGroup(groups[egsPollIndex++%(sizeof(groups)/sizeof(groups[0]))]);busy=false;
   nextPollMs=millis()+cfg.pollIntervalMs;
 }
-void livePollTick(){if(activeModule==MOD_ENGINE)engineLivePollTick();else if(activeModule==MOD_ABS)absLivePollTick();else if(activeModule==MOD_EGS)egsLivePollTick();}
+void livePollTick(){if(activeModule==MOD_ENGINE)engineLivePollTick();else if(activeModule==MOD_ABS)absLivePollTick();else if(activeModule==MOD_EGS)egsLivePollTick();else if(activeModule==MOD_HZR||activeModule==MOD_KI)sharedLivePollTick();}
 String engineExpected(const char*id){
   String k=id;
   if(k=="rpm"){if(engIdleTarget.valid&&engSpeed.valid&&engSpeed.value<1.0)return"Idle target "+engIdleTarget.text+" rpm · warm idle usually ~680 rpm";return"Warm idle ~680 rpm · operating RPM varies";}
@@ -344,6 +345,23 @@ String sensorsJson(bool captureOnly=false){
     add("kickdown","Kickdown",egsKickdown);add("limp","Limp mode",egsLimp);add("currentFault","Current fault flag",egsCurrentFault);add("upshift","Upshift in progress",egsUpshift);add("downshift","Downshift in progress",egsDownshift);add("tccActive","Converter clutch active",egsTccActive);
     for(int i=0;i<34;i++)add(egsExtraDef[i].id,egsExtraDef[i].label,egsExtra[i]);
     for(int i=0;i<26;i++)add(egsCanDef[i].id,egsCanDef[i].label,egsCan[i]);
+  }
+  if(activeModule==MOD_HZR||activeModule==MOD_KI||activeModule==MOD_EWM){
+    if(activeModule==MOD_KI){
+      add("kiFuel","Fuel tank content",kiFuelLitres);add("kiOutside","Outside temperature",kiOutsideTemp);
+      add("kiDimmer","Instrument dimmer",kiDimmer);add("kiSpeed","Cluster vehicle speed",kiSpeed);
+      add("kiSender","Fuel sender resistance",kiSenderOhms);
+    }
+    for(int g=0;g<SHARED_GROUP_COUNT;g++){
+      if(sharedLiveGroups[g].module!=(uint8_t)activeModule)continue;
+      SharedGroupData &d=sharedGroupData[g];
+      for(int j=0;j<d.count;j++){
+        String id="g"+hex2(sharedLiveGroups[g].service)+hex2(sharedLiveGroups[g].a)+
+          (sharedLiveGroups[g].len==3?hex2(sharedLiveGroups[g].b):String(""))+"_b"+String(j);
+        String label=String(sharedLiveGroups[g].label)+" · data byte "+String(j)+" (raw decimal)";
+        add(id.c_str(),label.c_str(),d.bytes[j]);
+      }
+    }
   }
   if(!captureOnly)s+="]}";return s;
 }
