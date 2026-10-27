@@ -70,6 +70,7 @@ String wifiPage(){
 
 #ifdef T1N_USE_GZIP_PAGE
 #include "scanner_ui_gzip_generated.h"
+#include "advanced_ui_gzip_generated.h"
 #endif
 
 void setupRoutes(){
@@ -115,7 +116,14 @@ web.on("/",HTTP_GET,[]{
   web.send(200,"text/html; charset=utf-8",scannerPage());
 #endif
 });
-web.on("/advanced",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/html; charset=utf-8",advancedPage());});
+web.on("/advanced",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");
+#ifdef T1N_USE_GZIP_PAGE
+  web.sendHeader("Content-Encoding","gzip");
+  web.send_P(200,"text/html; charset=utf-8",(const char*)ADVANCED_UI_GZIP,ADVANCED_UI_GZIP_LEN);
+#else
+  web.send(200,"text/html; charset=utf-8",advancedPage());
+#endif
+});
 web.on("/update",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store, no-cache, must-revalidate");web.sendHeader("Pragma","no-cache");web.send(200,"text/html; charset=utf-8",updatePage());});
 web.on("/api/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",moduleStatusJson());});
 web.on("/api/sensors",HTTP_GET,[]{web.send(200,"application/json",sensorsJson());});
