@@ -49,6 +49,26 @@ String runSharedProbe(unsigned i){
 }
 
 
+// Use the analyzer-verified pre-compensated waveform for OBD15 only.
+// RXD is sampled by UART after the frame; echoes of transmitted bytes are
+// intentionally discarded. The ECU response starts after transmission.
+void sendPin15CompensatedFrame(const uint8_t *b,size_t n,int fallAdvance=11,int riseAdvance=75){
+  if(uartAttached){KL.end();uartAttached=false;}
+  pinMode(TX_PIN,OUTPUT);digitalWrite(TX_PIN,gpioForKHigh());
+  uint32_t start=micros()+300;
+  for(size_t i=0;i<n;i++){
+    uint32_t t0=start+i*cfg.byteSpacingUs;
+    waitUntilUs(t0-100);
+    noInterrupts();
+    sendPin15CompensatedByte(b[i],t0,fallAdvance,riseAdvance);
+    interrupts();
+  }
+  digitalWrite(TX_PIN,gpioForKHigh());
+  uartOn(); // Attach RX UART immediately, before any ECU response.
+  lastTxHex=bytesHex(b,n);
+  logx("OBD15 compensated TX "+lastTxHex);
+}
+
 // Timing experiment isolated to physical channel 2, OBD15. The ESP32 hardware
 // UART remains untouched for all normal module connections and other channels.
 // Byte waveform is 8N1 at 10400 baud; LOW/HIGH transitions are pre-positioned
