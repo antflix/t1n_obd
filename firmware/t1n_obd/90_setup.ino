@@ -80,10 +80,10 @@ web.on("/api/module/groups",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store
 web.on("/api/module/read",HTTP_POST,[]{
   if(!diagnosticSession||busy||jobConnect){web.send(409,"text/plain","Connect the desired module, then stop live polling before probing.");return;}
   if(activeModule==MOD_HZR||activeModule==MOD_KI||activeModule==MOD_EWM){if(livePolling){web.send(409,"text/plain","Stop live polling before individual group requests");return;}busy=true;bool ok=false;String data=readSharedGroupByRequest(web.arg("request"),ok);busy=false;web.send(ok?200:422,"text/plain; charset=utf-8",data);return;}
-  String arg=web.arg("group");if(arg.length()<1||arg.length()>2){web.send(400,"text/plain","ABS: 01-03; EGS: 30-38,40,54.");return;}
+  String arg=web.arg("group");if(arg.length()<1||arg.length()>2){web.send(400,"text/plain","ABS: 01-04; EGS: 30-38,40,54.");return;}
   char* endPtr=nullptr;unsigned long id=strtoul(arg.c_str(),&endPtr,16);
   if(!endPtr||*endPtr!=0||id>255){web.send(400,"text/plain","Invalid hex group");return;}
-  if((activeModule==MOD_ABS&&(id<1||id>3))||(activeModule==MOD_EGS&&egsGroupIndex((uint8_t)id)<0)
+  if((activeModule==MOD_ABS&&(id<1||id>(absKm20?4:3)))||(activeModule==MOD_EGS&&egsGroupIndex((uint8_t)id)<0)
     ||(activeModule!=MOD_ABS&&activeModule!=MOD_EGS)){web.send(400,"text/plain","Unsupported group");return;}
   busy=true;bool ok=false;String result=probeKnownModuleGroup((uint8_t)id,ok);busy=false;
   web.send(ok?200:422,"text/plain; charset=utf-8",result);
