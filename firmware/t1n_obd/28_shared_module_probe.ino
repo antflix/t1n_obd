@@ -34,10 +34,10 @@ String runSharedProbe(unsigned i){
   int low=digitalRead(RX_PIN);
   digitalWrite(TX_PIN,gpioForKHigh());delayMicroseconds(25000);
   int high=digitalRead(RX_PIN);
-  uartOn();flushRx();
   uint8_t payload[]={0x81},tx[12],raw[256],reply[128];
   size_t n=buildKwpFrame(payload,1,tx,sizeof(tx)),fn=0;
-  sendSpacedBytes(tx,n);
+  if(t.obd==15){sendPin15CompensatedFrame(tx,n);}
+  else{uartOn();flushRx();sendSpacedBytes(tx,n);}
   size_t rn=readUntilEcuFrame(raw,sizeof(raw),reply,fn,sizeof(reply),950);
   String txHex=bytesHex(tx,n),rxHex=bytesHex(raw,rn),ecuHex=bytesHex(reply,fn);
   bool ok=false;
