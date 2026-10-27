@@ -367,6 +367,7 @@ String sensorsJson(bool captureOnly=false){
       for(int i=0;i<6;i++){add(idsT[i],labelsT[i],hzTemp[i]);add(idsS[i],labelsS[i],hzSwitch[i]);}
       for(int i=0;i<12;i++)add(idsO[i],labelsO[i],hzStatus[i]);
     }
+    if(activeModule==MOD_EWM){for(int i=0;i<EWM_FIELD_COUNT;i++)add(ewmFieldDefs[i].id,ewmFieldDefs[i].label,ewmFields[i]);}
     if(activeModule==MOD_KI){
       add("kiFuel","Fuel tank content",kiFuelLitres);add("kiOutside","Outside temperature",kiOutsideTemp);
       add("kiDimmer","Instrument dimmer",kiDimmer);add("kiSpeed","Cluster vehicle speed",kiSpeed);
