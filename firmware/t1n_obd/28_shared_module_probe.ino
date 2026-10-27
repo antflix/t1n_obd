@@ -1,5 +1,6 @@
 // Explicit forward declarations: Arduino concatenates .ino files, and the
 // helper implementations appear after their call sites.
+size_t readPin15CompensatedResponse(uint8_t *raw,size_t maxRaw,uint8_t *frame,size_t &frameLen,size_t maxFrame,uint32_t timeoutMs);
 void sendPin15CompensatedByte(uint8_t value,uint32_t t0,int fallAdvance,int riseAdvance);
 void sendPin15CompensatedFrame(const uint8_t *b,size_t n,int fallAdvance=11,int riseAdvance=75);
 // Read-only, allowlisted StartCommunication probe for other ECUs sharing our four K-lines.
@@ -42,7 +43,7 @@ String runSharedProbe(unsigned i){
   size_t n=buildKwpFrame(payload,1,tx,sizeof(tx)),fn=0;
   if(t.obd==15){sendPin15CompensatedFrame(tx,n);}
   else{uartOn();flushRx();sendSpacedBytes(tx,n);}
-  size_t rn=readUntilEcuFrame(raw,sizeof(raw),reply,fn,sizeof(reply),950);
+  size_t rn=t.obd==15?readPin15CompensatedResponse(raw,sizeof(raw),reply,fn,sizeof(reply),950):readUntilEcuFrame(raw,sizeof(raw),reply,fn,sizeof(reply),950);
   String txHex=bytesHex(tx,n),rxHex=bytesHex(raw,rn),ecuHex=bytesHex(reply,fn);
   bool ok=false;
   if(fn){const uint8_t *p=nullptr;size_t pn=0;ok=responsePayload(reply,fn,p,pn)&&pn&&p[0]==0xC1;}
@@ -52,6 +53,63 @@ String runSharedProbe(unsigned i){
   return "{\"target\":\""+jsonEscape(t.name)+"\",\"obdPin\":"+String(t.obd)+",\"address\":\"0x"+hex2(t.address)+"\",\"rxGpio\":"+String(K_RX[ch])+",\"txGpio\":"+String(K_TX[ch])+",\"idleHigh\":"+String(idle==HIGH?1:0)+",\"drivenLow\":"+String(low==LOW?1:0)+",\"releasedHigh\":"+String(high==HIGH?1:0)+",\"tx\":\""+txHex+"\",\"rawRx\":\""+rxHex+"\",\"ecuFrame\":\""+ecuHex+"\",\"accepted\":"+String(ok?"true":"false")+"}";
 }
 
+
+
+// Read-only software RX for the asymmetric OBD15 waveform. Analyzer measurements
+// show RXD falling edges ~11us late and rising edges ~75us late. UART byte
+// decoding fails; a ~32us earlier interpretation of rising edges restores
+// the exact C1 response (including checksum) for both HZRKL and KI.
+struct Pin15RxEdge {uint32_t us;uint8_t high;};
+static bool pin15HighAt(const Pin15RxEdge *e,size_t count,uint32_t t,bool initial){
+  bool state=initial;
+  for(size_t j=0;j<count;j++){
+    uint32_t when=e[j].us;
+    if(e[j].high)when=when>32?when-32:0;
+    if(when>t)break;
+    state=e[j].high!=0;
+  }
+  return state;
+}
+size_t readPin15CompensatedResponse(uint8_t *raw,size_t maxRaw,uint8_t *frame,
+                                    size_t &frameLen,size_t maxFrame,uint32_t timeoutMs){
+  // This routine follows a TX completed before ECU reply. It observes RXD,
+  // never drives the bus, and never runs for more than timeoutMs.
+  Pin15RxEdge e[256];size_t ec=0;
+  const uint32_t begin=micros(),timeoutUs=timeoutMs*1000UL;
+  const uint8_t pin=RX_PIN;
+  const bool initial=digitalRead(pin)==HIGH;
+  bool prev=initial;
+  uint32_t last=0;
+  while((uint32_t)(micros()-begin)<timeoutUs){
+    bool high=digitalRead(pin)==HIGH;
+    if(high!=prev){
+      uint32_t now=micros()-begin;
+      if(ec<sizeof(e)/sizeof(e[0]))e[ec++]={now,(uint8_t)high};
+      prev=high;last=now;
+      if(ec>=sizeof(e)/sizeof(e[0]))break;
+    }
+    if(ec>0 && (uint32_t)(micros()-begin-last)>40000UL)break;
+  }
+  const uint32_t b=(1000000UL+cfg.baud/2)/cfg.baud;
+  size_t len=0;
+  uint32_t nextStart=0;
+  for(size_t j=0;j<ec&&len<maxRaw;j++){
+    if(e[j].high||e[j].us<nextStart)continue;
+    uint32_t start=e[j].us;
+    uint8_t value=0;
+    for(int bit=0;bit<8;bit++){
+      if(pin15HighAt(e,ec,start+b*(bit+1)+b/2,initial))value|=(uint8_t)(1U<<bit);
+    }
+    bool stop=pin15HighAt(e,ec,start+b*9+b/2,initial);
+    if(stop)raw[len++]=value;
+    nextStart=start+b*10-b/3; // Wait through the current stop bit.
+  }
+  frameLen=0;
+  if(len)extractEcuFrame(raw,len,frame,frameLen,maxFrame);
+  logx("OBD15 software RX edges="+String(ec)+" decoded="+bytesHex(raw,len)+
+       " frame="+bytesHex(frame,frameLen));
+  return len;
+}
 
 // Use the analyzer-verified pre-compensated waveform for OBD15 only.
 // RXD is sampled by UART after the frame; echoes of transmitted bytes are
