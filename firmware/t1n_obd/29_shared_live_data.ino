@@ -198,7 +198,7 @@ String modulesCatalogJson(){
     out+="{\"id\":"+String(i)+",\"name\":\""+jsonEscape(moduleName(m))+
       "\",\"address\":\"0x"+hex2(moduleAddr(m))+"\",\"obdPin\":"+String(moduleObdPin(m))+
       ",\"channel\":"+String(ch+1)+",\"verified\":true,\"liveCapability\":\""+
-      String(m==MOD_ABS?"verified read-only wheel speed, voltage and switch data":m==MOD_EWM?"CBF-decoded selectors, inputs, analog data":m==MOD_HZR||m==MOD_KI?"verified groups + raw values":"decoded fields")+"\",\"pollable\":"+
+      String(m==MOD_ABS?"wheel speeds, voltage, switches":m==MOD_EWM?"CBF-decoded selectors, inputs, analog data":m==MOD_HZR||m==MOD_KI?"verified groups + raw values":"decoded fields")+"\",\"pollable\":"+
       String("true")+"}";
   }
   return out+"]}";
