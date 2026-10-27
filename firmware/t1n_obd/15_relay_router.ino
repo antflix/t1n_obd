@@ -11,7 +11,7 @@ static const uint8_t K_MODULE[4] = {0,3,2,1}; // CR2, HVAC, EGS, ABS
 int selectedKline = -1;
 bool relayGpioUsable(uint8_t pin){return pin>=1&&pin<=39;}
 int relayIndexForModule(ModuleId m) {
-  for(int i=0;i<4;i++)if(K_MODULE[i]==(uint8_t)m)return i;
+  for(int i=0;i<4;i++)if(K_OBD[i]==moduleObdPin(m))return i;
   return -1;
 }
 void allRelaysOff() {
