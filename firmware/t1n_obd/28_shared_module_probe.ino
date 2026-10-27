@@ -1,3 +1,7 @@
+// Explicit forward declarations: Arduino concatenates .ino files, and the
+// helper implementations appear after their call sites.
+void sendPin15CompensatedByte(uint8_t value,uint32_t t0,int fallAdvance,int riseAdvance);
+void sendPin15CompensatedFrame(const uint8_t *b,size_t n,int fallAdvance=11,int riseAdvance=75);
 // Read-only, allowlisted StartCommunication probe for other ECUs sharing our four K-lines.
 // Never sends live-data, DTC clear, actuator, or security commands.
 // Target selection is by real OBD line and ECU address, independent of legacy ModuleId.
@@ -52,7 +56,7 @@ String runSharedProbe(unsigned i){
 // Use the analyzer-verified pre-compensated waveform for OBD15 only.
 // RXD is sampled by UART after the frame; echoes of transmitted bytes are
 // intentionally discarded. The ECU response starts after transmission.
-void sendPin15CompensatedFrame(const uint8_t *b,size_t n,int fallAdvance=11,int riseAdvance=75){
+void sendPin15CompensatedFrame(const uint8_t *b,size_t n,int fallAdvance,int riseAdvance){
   if(uartAttached){KL.end();uartAttached=false;}
   pinMode(TX_PIN,OUTPUT);digitalWrite(TX_PIN,gpioForKHigh());
   uint32_t start=micros()+300;
