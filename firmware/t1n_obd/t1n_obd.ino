@@ -41,7 +41,7 @@ int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.10.15-six-module-data";
+static const char* FIRMWARE_VERSION = "1.10.16-abs-km20";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -158,6 +158,7 @@ ValueState engCylCorr[5], engCylRpm[5];
 ValueState engIdleTarget, engDiagIdleTarget, engSpeedTarget, engAirMassTarget, engEgrAirMassTarget;
 ValueState engFuelReqADR, engFuelReqFGR, engFuelReqPWG, engFuelReqSync;
 ValueState absWheelFL, absWheelFR, absWheelRL, absWheelRR, absVoltage, absWheelSensorV, absBrakeLamp, absBrakeSwitch, absPump, absOutletFL, absOutletFR;
+ValueState absExtra[19]; bool absKm20=false; String absPartId="";
 ValueState egsCan[26]; // CBF-verified EGS embedded CAN-status data
 ValueState egsExtra[34]; // Additional EGS CBF-defined status, selector and solenoid measurements
 ValueState egsTemp, egsGear, egsTargetGear, egsRecognizedGear, egsSelector, egsProgram, egsConverterStatus, egsOutputRpm, egsTurbineRpm, egsN2Rpm, egsN3Rpm, egsEngineRpm, egsWheelFLRpm, egsWheelFRRpm, egsWheelRLRpm, egsWheelRRRpm, egsVehicleSpeed, egsFrontSpeed, egsBattery, egsSensorSupply, egsAskSupply, egsValveSupply, egsConverterSlip, egsConverterTargetSlip, egsConverterPressure, egsEngineTorque, egsConvertedTorque, egsModPressure, egsShiftPressure, egsModCurrentActual, egsModCurrentTarget, egsShiftCurrentActual, egsShiftCurrentTarget, egsTccDuty, egsPedal, egsGrade, egsMinGear, egsMaxGear, egsCoolant, egsOdometer, egsKickdown, egsLimp, egsCurrentFault, egsUpshift, egsDownshift, egsTccActive;
