@@ -2,15 +2,18 @@
 // Do not infer physical meaning from an unlabelled response byte.
 // ECU-specific group request tables and raw byte telemetry are intentionally separate
 // from the already validated CR2/EGS and experimental ABS transport.
-struct SharedLiveGroup { uint8_t module,service,a,b,len;const char *label; };
+struct SharedLiveGroup { uint8_t module,service,a,b,len;const char *label;bool poll; };
 static const SharedLiveGroup sharedLiveGroups[]={
- {MOD_HZR,0x21,0x60,0,2,"HVAC group 21 60"},
- {MOD_HZR,0x21,0x22,0,2,"HVAC group 21 22"},
- {MOD_HZR,0x21,0x62,0,2,"HVAC group 21 62"},
- {MOD_HZR,0x21,0x64,0,2,"HVAC group 21 64"},
- {MOD_KI,0x2A,0x01,0x01,3,"Cluster measurement group 01"},
- {MOD_KI,0x2A,0x01,0x07,3,"Cluster input and lamp states group 07"},
- {MOD_EWM,0xA1,0,0,1,"Shift lever fault/status summary (not live values)"}
+ {MOD_HZR,0x21,0x60,0,2,"HVAC temperature sensors",true},
+ {MOD_HZR,0x21,0x22,0,2,"HVAC switch states",true},
+ {MOD_HZR,0x21,0x62,0,2,"HVAC supply and compressor",true},
+ {MOD_HZR,0x21,0x64,0,2,"HVAC commanded outputs",true},
+ {MOD_KI,0x2A,0x01,0x01,3,"Cluster fuel, temperature and speed",true},
+ {MOD_KI,0x2A,0x01,0x07,3,"Cluster input and lamp states",true},
+ {MOD_HZR,0x21,0x61,0,2,"HVAC optional setpoint/voltage",false},
+ {MOD_HZR,0x21,0x63,0,2,"HVAC optional refrigerant pressure",false},
+ {MOD_HZR,0x21,0xE0,0,2,"HVAC optional internal values",false},
+ {MOD_EWM,0xA1,0,0,1,"Shift lever fault/status summary",false}
 };
 static const int SHARED_GROUP_COUNT=sizeof(sharedLiveGroups)/sizeof(sharedLiveGroups[0]);
 struct SharedGroupData {
@@ -22,6 +25,7 @@ struct SharedGroupData {
 };
 SharedGroupData sharedGroupData[SHARED_GROUP_COUNT];
 ValueState kiFuelLitres,kiOutsideTemp,kiDimmer,kiSpeed,kiSenderOhms;
+ValueState hzTemp[6],hzSwitch[6],hzStatus[12];
 int sharedPollIndex=0;
 String sharedGroupRequestHex(int i){
   const SharedLiveGroup &g=sharedLiveGroups[i];
@@ -48,6 +52,27 @@ bool readSharedGroup(int idx,bool annotateFailure=true){
   int header=g.module==MOD_EWM?1:2;
   s.count=(uint8_t)min((int)n-header,48);
   for(int j=0;j<s.count;j++)setNum(s.bytes[j],p[j+header],"raw",0);
+  if(g.module==MOD_HZR && n>=3){
+    auto bit=[&](ValueState &dst,uint8_t mask){setTxt(dst,(p[2]&mask)?"On":"Off");};
+    if(g.a==0x60 && n>=8){
+      setNum(hzTemp[0],p[2]*0.5-40,"°C",1);
+      setNum(hzTemp[1],p[3]/6.0,"°C",1);
+      setNum(hzTemp[2],p[4]*0.5-10,"°C",1);
+      setNum(hzTemp[3],p[5]*(-0.4260089695)+97.9820633,"°C",1);
+      setNum(hzTemp[4],p[6]-40.0,"°C",0);
+      setNum(hzTemp[5],p[7],"raw",0);
+    }else if(g.a==0x22){
+      for(int i=0;i<6;i++)bit(hzSwitch[i],1U<<i);
+    }else if(g.a==0x62&&n>=6){
+      setNum(hzStatus[0],p[2],"%",0);
+      setNum(hzStatus[1],((uint16_t)p[3]<<8)|p[4],"rpm",0);
+      setTxt(hzStatus[2],(p[5]&0x01)?"On":"Off");
+      setTxt(hzStatus[3],(p[5]&0x80)?"On":"Off");
+    }else if(g.a==0x64&&n>=5){
+      for(int i=0;i<7;i++)bit(hzStatus[4+i],1U<<i);
+      setNum(hzStatus[11],(((uint16_t)p[3]<<8)|p[4])*0.0977516994,"%",1);
+    }
+  }
   if(g.module==MOD_KI && g.b==0x01 && n>=10){
     // INSBR901 CBF; positions validated against physical Autel snapshots.
     setNum(kiFuelLitres,p[2]*0.5,"L",1);
@@ -65,7 +90,7 @@ void sharedLivePollTick(){
   int available[SHARED_GROUP_COUNT],count=0;
   for(int i=0;i<SHARED_GROUP_COUNT;i++)
     if(sharedLiveGroups[i].module==(uint8_t)activeModule &&
-       activeModule!=MOD_EWM && !sharedGroupData[i].unsupported)available[count++]=i;
+       sharedLiveGroups[i].poll && !sharedGroupData[i].unsupported)available[count++]=i;
   if(!count){livePolling=false;return;}
   int idx=available[(sharedPollIndex++)%count];
   busy=true;bool ok=readSharedGroup(idx,false);busy=false;
