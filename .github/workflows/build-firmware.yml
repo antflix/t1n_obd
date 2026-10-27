@@ -43,18 +43,30 @@ jobs:
               "#pragma once\n#define T1N_BUILD_WIFI_PASSWORD " + json.dumps(password) + "\n"
           )
           PY
+      - name: Install deterministic asset compressors
+        run: |
+          npm install --no-save --ignore-scripts --no-audit --no-fund terser@5.39.0
+          python3 -m pip install --quiet zopfli==0.4.2
       - name: Compress dashboard for limited OTA partitions
         shell: bash
         run: |
           python3 - <<'PY'
-          import gzip, pathlib, re
+          import pathlib, re, subprocess, zopfli.gzip
+          def compress_html(html):
+              match=re.search(r'(<script>)(.*?)(</script>)',html,re.S)
+              if not match:
+                  raise SystemExit('Missing dashboard script element')
+              js=subprocess.run(['./node_modules/.bin/terser','--compress','--mangle'],
+                                input=match.group(2),text=True,capture_output=True,check=True).stdout.strip()
+              html=html[:match.start(2)]+js+html[match.end(2):]
+              raw=html.encode('utf-8')
+              return raw,zopfli.gzip.compress(raw,numiterations=15)
           path=pathlib.Path("firmware/t1n_obd/50_scanner_ui.ino")
           src=path.read_text()
           found=re.search(r'String scannerPage\(\)\{return R"HTML\((.*?)\)HTML";\}', src, re.S)
           if not found:
               raise SystemExit("Cannot locate dashboard HTML")
-          raw=found.group(1).encode("utf-8")
-          compressed=gzip.compress(raw,compresslevel=9,mtime=0)
+          raw,compressed=compress_html(found.group(1))
           if len(compressed)>=len(raw):
               raise SystemExit("Dashboard compression not effective")
           lines=["#pragma once","#include <Arduino.h>","static const uint8_t SCANNER_UI_GZIP[] PROGMEM = {"]
@@ -67,8 +79,7 @@ jobs:
           found=re.search(r'String advancedPage\(\)\{return R"HTML\((.*?)\)HTML";\}',advanced,re.S)
           if not found:
               raise SystemExit("Cannot locate advanced workbench HTML")
-          raw=found.group(1).encode("utf-8")
-          compressed=gzip.compress(raw,compresslevel=9,mtime=0)
+          raw,compressed=compress_html(found.group(1))
           lines=["#pragma once","#include <Arduino.h>","static const uint8_t ADVANCED_UI_GZIP[] PROGMEM = {"]
           for i in range(0,len(compressed),16):
               lines.append("  "+", ".join("0x%02x"%v for v in compressed[i:i+16])+",")
