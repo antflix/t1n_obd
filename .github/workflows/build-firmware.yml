@@ -61,7 +61,7 @@ jobs:
               html=html[:match.start(2)]+js+html[match.end(2):]
               css_match=re.search(r'(<style>)(.*?)(</style>)',html,re.S)
               if css_match:
-                  css=subprocess.run(['./node_modules/.bin/cleancss','--level','2','-'],
+                  css=subprocess.run(['./node_modules/.bin/cleancss','-O2','-'],
                                      input=css_match.group(2),text=True,capture_output=True,check=True).stdout.strip()
                   html=html[:css_match.start(2)]+css+html[css_match.end(2):]
               html=re.sub(r'>\s+<','><',html)
