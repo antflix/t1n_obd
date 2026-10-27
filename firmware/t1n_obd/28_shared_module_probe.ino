@@ -154,6 +154,7 @@ void sendPin15CompensatedByte(uint8_t value,uint32_t t0,int fallAdvance,int rise
   }
   waitUntilUs(t0+10*bitUs);
 }
+#ifdef T1N_ENABLE_PIN15_TIMING_LAB
 String runPin15TimingTest(int fallAdvance,int riseAdvance,uint8_t address){
   // Constrain experimental timings to avoid invalid bit-cell transition ordering.
   if(fallAdvance<0||fallAdvance>30||riseAdvance<0||riseAdvance>85||
@@ -187,3 +188,5 @@ String runPin15TimingTest(int fallAdvance,int riseAdvance,uint8_t address){
     String(fallAdvance)+",\"riseAdvanceUs\":"+String(riseAdvance)+
     ",\"tx\":\""+bytesHex(tx,5)+"\",\"capture\":\"D0 RXD, D1 TXD\"}";
 }
+
+#endif // T1N_ENABLE_PIN15_TIMING_LAB
