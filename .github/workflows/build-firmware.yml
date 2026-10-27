@@ -63,6 +63,18 @@ jobs:
           lines.extend(["};","static const size_t SCANNER_UI_GZIP_LEN = sizeof(SCANNER_UI_GZIP);"])
           pathlib.Path("firmware/t1n_obd/scanner_ui_gzip_generated.h").write_text("\n".join(lines)+"\n")
           print("Scanner UI compressed:",len(raw),"->",len(compressed),"bytes; saved",len(raw)-len(compressed))
+          advanced=pathlib.Path("firmware/t1n_obd/40_advanced_ui.ino").read_text()
+          found=re.search(r'String advancedPage\(\)\{return R"HTML\((.*?)\)HTML";\}',advanced,re.S)
+          if not found:
+              raise SystemExit("Cannot locate advanced workbench HTML")
+          raw=found.group(1).encode("utf-8")
+          compressed=gzip.compress(raw,compresslevel=9,mtime=0)
+          lines=["#pragma once","#include <Arduino.h>","static const uint8_t ADVANCED_UI_GZIP[] PROGMEM = {"]
+          for i in range(0,len(compressed),16):
+              lines.append("  "+", ".join("0x%02x"%v for v in compressed[i:i+16])+",")
+          lines.extend(["};","static const size_t ADVANCED_UI_GZIP_LEN = sizeof(ADVANCED_UI_GZIP);"])
+          pathlib.Path("firmware/t1n_obd/advanced_ui_gzip_generated.h").write_text("\n".join(lines)+"\n")
+          print("Advanced UI compressed:",len(raw),"->",len(compressed),"bytes; saved",len(raw)-len(compressed))
           PY
       - name: Compile ESP32 Dev Module with OTA partition
         run: |
