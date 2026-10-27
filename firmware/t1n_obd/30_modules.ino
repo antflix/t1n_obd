@@ -50,13 +50,23 @@ bool connectModule(ModuleId module){
       }
       activity("Short CR2 init did not pass live-data verification; using proven replay.");
     }else activity("Short CR2 init not accepted; using proven replay.");
-    // Recovery path preserves the existing, vehicle-verified 34-second startup.
+    // Keep legacy replay in the source, but exclude its implementation from
+    // this build for the existing 1.25 MiB OTA partition. Short engine init
+    // has been confirmed on this vehicle by a 21 12 live-data response.
+#ifdef T1N_ENABLE_LEGACY_CR2_REPLAY
     allRelaysOff();
     if(!selectRelayForModule(MOD_ENGINE)){setStatus("K-LINE CHANNEL ERROR");return false;}
     bool ok=connectCR2();
     if(ok){activeModule=MOD_ENGINE;activeEcuAddr=0x12;requestedModule=MOD_ENGINE;livePolling=true;nextPollMs=millis()+80;}
     else allRelaysOff();
     return ok;
+#else
+    diagnosticSession=false;cr2Connected=false;livePolling=false;
+    releaseKL();allRelaysOff();autoReconnect=false;
+    lastError="CR2 quick initialization was not confirmed; legacy slow replay excluded from current OTA image.";
+    setStatus("CR2 INIT NOT VERIFIED");
+    return false;
+#endif
   }
   bool ok=connectFastModule(module);if(!ok)allRelaysOff();return ok;
 }
