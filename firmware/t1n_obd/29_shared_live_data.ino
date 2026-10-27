@@ -45,7 +45,7 @@ bool readSharedGroup(int idx,bool annotateFailure=true){
     if(p[2]==0x11||p[2]==0x12||p[2]==0x31)s.unsupported=true;
     return false;
   }
-  if(p[0]!=expected || (g.module!=MOD_EWM && p[1]!=g.a)){s.problem="Unexpected response service/group";s.raw=bytesHex(r,rn);return false;}
+  if(p[0]!=expected || (g.module!=MOD_EWM && p[1]!=(g.module==MOD_KI?g.b:g.a))){s.problem="Unexpected response service/group";s.raw=bytesHex(r,rn);return false;}
   s.raw=bytesHex(r,rn);s.problem="";s.sampleMs=millis();
   // For 21 GG replies drop 61 GG; for 2A 01 GG replies drop 6A 01,
   // preserve 07 (group identifier when returned) as a visible raw byte.
