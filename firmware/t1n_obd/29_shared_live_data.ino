@@ -13,7 +13,8 @@ static const SharedLiveGroup sharedLiveGroups[]={
  {MOD_HZR,0x21,0x61,0,2,"HVAC optional setpoint/voltage",false},
  {MOD_HZR,0x21,0x63,0,2,"HVAC optional refrigerant pressure",false},
  {MOD_HZR,0x21,0xE0,0,2,"HVAC optional internal values",false},
- {MOD_EWM,0xA1,0,0,1,"Shift lever fault/status summary",false}
+ {MOD_EWM,0xA1,0,0,1,"EWM status/fault record (raw, meaning unverified)",true},
+ {MOD_EWM,0x3C,0x00,0,2,"EWM identification/production data (read once)",false}
 };
 static const int SHARED_GROUP_COUNT=sizeof(sharedLiveGroups)/sizeof(sharedLiveGroups[0]);
 struct SharedGroupData {
@@ -95,7 +96,7 @@ void sharedLivePollTick(){
   int idx=available[(sharedPollIndex++)%count];
   busy=true;bool ok=readSharedGroup(idx,false);busy=false;
   if(!ok)logx("Shared live "+sharedGroupRequestHex(idx)+" did not provide data: "+sharedGroupData[idx].problem);
-  nextPollMs=millis()+450;
+  nextPollMs=millis()+(activeModule==MOD_EWM?3000:450);
 }
 String sharedGroupCatalogJson(){
   String out="{\"module\":\""+jsonEscape(moduleName(activeModule))+"\",\"groups\":[";
@@ -130,8 +131,8 @@ String modulesCatalogJson(){
     out+="{\"id\":"+String(i)+",\"name\":\""+jsonEscape(moduleName(m))+
       "\",\"address\":\"0x"+hex2(moduleAddr(m))+"\",\"obdPin\":"+String(moduleObdPin(m))+
       ",\"channel\":"+String(ch+1)+",\"verified\":true,\"liveCapability\":\""+
-      String(m==MOD_ABS?"transport research":m==MOD_EWM?"status only":m==MOD_HZR||m==MOD_KI?"verified groups + raw values":"decoded fields")+"\",\"pollable\":"+
-      String(m!=MOD_ABS&&m!=MOD_EWM?"true":"false")+"}";
+      String(m==MOD_ABS?"transport research":m==MOD_EWM?"read-only raw status, meaning unverified":m==MOD_HZR||m==MOD_KI?"verified groups + raw values":"decoded fields")+"\",\"pollable\":"+
+      String(m!=MOD_ABS?"true":"false")+"}";
   }
   return out+"]}";
 }
