@@ -41,7 +41,7 @@ int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.10.14-four-channel-test";
+static const char* FIRMWARE_VERSION = "1.10.15-six-module-data";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -127,7 +127,7 @@ bool livePolling = false;
 uint32_t nextPollMs = 0;
 uint32_t lastGoodTrafficMs = 0;
 
-enum ModuleId : uint8_t { MOD_ENGINE=0, MOD_ABS=1, MOD_EGS=2, MOD_HZR=3 };
+enum ModuleId : uint8_t { MOD_ENGINE=0, MOD_ABS=1, MOD_EGS=2, MOD_HZR=3, MOD_EWM=4, MOD_KI=5 };
 bool relayGpioUsable(uint8_t pin);
 void allRelaysOff();
 void initRelayRouting();
@@ -165,9 +165,9 @@ ValueState egsTemp, egsGear, egsTargetGear, egsRecognizedGear, egsSelector, egsP
 void setNum(ValueState &v,double x,const String &unit,int decimals=1){v.value=x;v.unit=unit;v.text=String(x,decimals);v.valid=true;v.updatedMs=millis();}
 void setTxt(ValueState &v,const String &x){v.text=x;v.unit="";v.valid=true;v.updatedMs=millis();}
 bool stale(const ValueState &v,uint32_t age=24000){return !v.valid || millis()-v.updatedMs>age;}
-String moduleName(ModuleId m){return m==MOD_ENGINE?"Engine / CR2":m==MOD_ABS?"ABS / ABSBR901":m==MOD_EGS?"Transmission / EGS52":"HVAC / HZRKL";}
-uint8_t moduleAddr(ModuleId m){return m==MOD_ENGINE?0x12:m==MOD_ABS?0x34:m==MOD_EGS?0x20:0x50;}
-uint8_t moduleObdPin(ModuleId m){return m==MOD_ENGINE?7:m==MOD_ABS?9:m==MOD_EGS?11:15;}
+String moduleName(ModuleId m){return m==MOD_ENGINE?"Engine / CR2":m==MOD_ABS?"ABS / ABSBR901":m==MOD_EGS?"Transmission / EGS52":m==MOD_HZR?"HVAC / HZRKL":m==MOD_EWM?"Shift Lever / EWM":"Instrument Cluster / KI";}
+uint8_t moduleAddr(ModuleId m){return m==MOD_ENGINE?0x12:m==MOD_ABS?0x34:m==MOD_EGS?0x20:m==MOD_HZR?0x50:m==MOD_EWM?0x24:0x69;}
+uint8_t moduleObdPin(ModuleId m){return m==MOD_ENGINE?7:m==MOD_ABS?9:m==MOD_EGS?11:m==MOD_EWM?9:15;}
 
 uint32_t p3ReadyAtMs = 0;
 uint8_t keepaliveMisses = 0;
