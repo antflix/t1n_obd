@@ -53,7 +53,7 @@ bool readSharedGroup(int idx,bool annotateFailure=true){
   s.count=(uint8_t)min((int)n-header,48);
   for(int j=0;j<s.count;j++)setNum(s.bytes[j],p[j+header],"raw",0);
   if(g.module==MOD_HZR && n>=3){
-    auto bit=[&](ValueState &dst,uint8_t mask){setTxt(dst,(p[2]&mask)?"On":"Off");};
+    auto flagState=[&](ValueState &dst,uint8_t mask){setTxt(dst,(p[2]&mask)?"On":"Off");};
     if(g.a==0x60 && n>=8){
       setNum(hzTemp[0],p[2]*0.5-40,"°C",1);
       setNum(hzTemp[1],p[3]/6.0,"°C",1);
@@ -62,14 +62,14 @@ bool readSharedGroup(int idx,bool annotateFailure=true){
       setNum(hzTemp[4],p[6]-40.0,"°C",0);
       setNum(hzTemp[5],p[7],"raw",0);
     }else if(g.a==0x22){
-      for(int i=0;i<6;i++)bit(hzSwitch[i],1U<<i);
+      for(int i=0;i<6;i++)flagState(hzSwitch[i],1U<<i);
     }else if(g.a==0x62&&n>=6){
       setNum(hzStatus[0],p[2],"%",0);
       setNum(hzStatus[1],((uint16_t)p[3]<<8)|p[4],"rpm",0);
       setTxt(hzStatus[2],(p[5]&0x01)?"On":"Off");
       setTxt(hzStatus[3],(p[5]&0x80)?"On":"Off");
     }else if(g.a==0x64&&n>=5){
-      for(int i=0;i<7;i++)bit(hzStatus[4+i],1U<<i);
+      for(int i=0;i<7;i++)flagState(hzStatus[4+i],1U<<i);
       setNum(hzStatus[11],(((uint16_t)p[3]<<8)|p[4])*0.0977516994,"%",1);
     }
   }
