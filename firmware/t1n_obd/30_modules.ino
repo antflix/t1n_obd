@@ -357,6 +357,16 @@ String sensorsJson(bool captureOnly=false){
     for(int i=0;i<26;i++)add(egsCanDef[i].id,egsCanDef[i].label,egsCan[i]);
   }
   if(activeModule==MOD_HZR||activeModule==MOD_KI||activeModule==MOD_EWM){
+    if(activeModule==MOD_HZR){
+      const char *idsT[]={"hzOutside","hzCabin","hzEvap","hzOutlet","hzCoolant","hzSetRaw"};
+      const char *labelsT[]={"Outside temperature","Cabin temperature","Evaporator temperature","Outlet temperature","Coolant temperature","Set-temperature encoding (raw)"};
+      const char *idsS[]={"hzParking","hzAC","hzAuxHeat","hzIgnition","hzRecirc","hzResidual"};
+      const char *labelsS[]={"Parking heater switch","A/C switch","Auxiliary heater switch","Ignition terminal 15","Recirculation switch","Residual heat switch"};
+      const char *idsO[]={"hzDimmer","hzRpm","hzShutoff","hzEmergency","hzBooster","hzBlower","hzElecFan","hzPump","hzRecircValve","hzNight","hzClutch","hzWaterValve"};
+      const char *labelsO[]={"Dimmer setting","Engine RPM via HVAC","Compressor shutoff","Emergency compressor shutoff","Booster heater command","Blower stage 1 command","Electric cooling fan command","Water pump command","Recirculation valve command","Night dimming command","Magnetic clutch command","Water-valve command percentage"};
+      for(int i=0;i<6;i++){add(idsT[i],labelsT[i],hzTemp[i]);add(idsS[i],labelsS[i],hzSwitch[i]);}
+      for(int i=0;i<12;i++)add(idsO[i],labelsO[i],hzStatus[i]);
+    }
     if(activeModule==MOD_KI){
       add("kiFuel","Fuel tank content",kiFuelLitres);add("kiOutside","Outside temperature",kiOutsideTemp);
       add("kiDimmer","Instrument dimmer",kiDimmer);add("kiSpeed","Cluster vehicle speed",kiSpeed);
