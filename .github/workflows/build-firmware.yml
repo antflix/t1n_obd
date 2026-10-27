@@ -81,7 +81,7 @@ jobs:
             -printf '%s %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
           test -n "$APP_BIN"
           cp "$APP_BIN" dist/firmware.bin
-          test "$(stat -c %s dist/firmware.bin)" -le 1300000 || { echo "OTA image exceeds conservative 1,300,000-byte legacy app-slot limit"; exit 1; }
+          test "$(stat -c %s dist/firmware.bin)" -le 1450000 || { echo "OTA image exceeds conservative 1,450,000-byte cap (min_spiffs app partition is 1,966,080 bytes)"; exit 1; }
           # Full flash image for USB installers such as ESPHome Web.
           FULL_BIN="$(find build -maxdepth 1 -type f -name '*.merged.bin' -print -quit)"
           test -n "$FULL_BIN" || { echo "Missing merged flash image"; exit 1; }
