@@ -6,6 +6,9 @@
 
 static const uint8_t SD_CS_PIN=22, SD_CLK_PIN=18, SD_MISO_PIN=19, SD_MOSI_PIN=17;
 static bool sdReady=false;
+// Accessor used by the history and monitor modules without exposing internals.
+bool sdCardReady(){return sdReady;}
+
 static String sdLastError="SD not checked";
 static File sdUploadFile;
 static String sdUploadName, sdUploadError;
