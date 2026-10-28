@@ -7,6 +7,8 @@
 #include "monitor_dtc_diff.h"
 #include "monitor_ignition_gate.h"
 extern uint32_t lastDtcScanMs; // defined in 90_setup.ino
+void monitorLog(const String &type,ModuleId mod,const String &detail);
+void monitorSetEnabled(bool enable);
 
 struct MonModule {
   uint32_t connects=0,failures=0,recentWrites=0,lastConnectionMs=0;
