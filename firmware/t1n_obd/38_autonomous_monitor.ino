@@ -263,7 +263,7 @@ String monitorStatusJson(){
     +",\"ignitionSignal\":\""+String(monIgnition.state==IGN_HIGH?"HIGH":
                     monIgnition.state==IGN_LOW?"LOW":"UNKNOWN")+"\""
     +",\"ignitionLowObserved\":"+String(monIgnition.sawLow?"true":"false")
-    +",\"ignitionQualified\":false"
+    +",\"ignitionQualified\":"+String(monIgnition.sawLow?"true":"false")
     +",\"absAutoQualified\":"+String(monAbsChannelQualified?"true":"false")
     +",\"engineFailuresInWindow\":"+String(monEngineFailuresInWindow)
     +",\"active\":"+String(monOwnSession?"true":"false")
