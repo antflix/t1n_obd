@@ -91,6 +91,11 @@ web.on("/api/monitor/selftest",HTTP_POST,[]{
   bool ok=monitorStorageSelfTest(result);
   web.send(ok?200:409,"text/plain",result);
 });
+web.on("/api/monitor/dtc/selftest",HTTP_POST,[]{
+  String result;
+  bool ok=monitorDtcSelfTest(result);
+  web.send(ok?200:500,"text/plain",result);
+});
 web.on("/api/monitor/enable",HTTP_POST,[]{
   String enabled=web.arg("enabled");
   if(enabled!="0"&&enabled!="1"){web.send(400,"text/plain","Set enabled=0 or 1");return;}
