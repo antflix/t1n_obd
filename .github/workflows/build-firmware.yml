@@ -122,6 +122,8 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -I firmware/t1n_obd tests/monitor_dtc_diff.cpp -o /tmp/t1n-dtc-test
           /tmp/t1n-dtc-test
+          g++ -std=c++17 -Wall -Wextra -Werror -I firmware/t1n_obd tests/monitor_ignition_gate.cpp -o /tmp/t1n-ignition-test
+          /tmp/t1n-ignition-test
       - name: Compile ESP32 Dev Module with OTA partition
         run: |
           mkdir -p build dist
