@@ -7,6 +7,8 @@
 #include <SPIFFS.h>
 #include <SD.h>
 #include <FS.h>
+#include <stdlib.h>
+#include <stdint.h>
 // The existing scanner code mounts SD before starting history. Never autoformat
 // external or internal storage: failure is reported, not silently erased.
 bool sdCardReady();
@@ -308,8 +310,12 @@ String historyStatusJson(){
   String s="{\"enabled\":"+String(hReady?"true":"false")
     +",\"timeReady\":"+String(historyNow()?"true":"false")
     +",\"storage\":\""+String(hUsingSD?"microSD":"internal SPIFFS")+"\""
-    +",\"capacityBytes\":"+String(hReady?(hUsingSD?SD.totalBytes():SPIFFS.totalBytes()):0)
-    +",\"usedBytes\":"+String(hReady?(hUsingSD?SD.usedBytes():SPIFFS.usedBytes()):0)
+    +",\"capacityBytes\":"+String(hReady?(hUsingSD?
+      ((uint32_t)hRings[0].capacity+hRings[1].capacity+hRings[2].capacity)*sizeof(HistoryRecord):
+      (uint32_t)SPIFFS.totalBytes()):0)
+    +",\"usedBytes\":"+String(hReady?(hUsingSD?
+      ((uint32_t)hRings[0].used+hRings[1].used+hRings[2].used)*sizeof(HistoryRecord):
+      (uint32_t)SPIFFS.usedBytes()):0)
     +",\"successfulWrites\":"+String(hVerifiedWrites)+",\"writeErrors\":"+String(hWriteErrors)
     +",\"clock\":"+historyClockJson()
     +",\"error\":\""+jsonEscape(hError)+"\",\"tiers\":[";
