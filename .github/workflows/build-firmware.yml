@@ -110,7 +110,7 @@ jobs:
               contents[name]=m.group(1).encode('utf-8')
           version=re.search(r'FIRMWARE_VERSION\s*=\s*"([^"]+)"',
                             pathlib.Path('firmware/t1n_obd/t1n_obd.ino').read_text()).group(1)
-          manifest={'version':version,'pinout':{'cs':22,'clk':18,'miso':19,'mosi':25},
+          manifest={'version':version,'pinout':{'cs':22,'clk':18,'miso':19,'mosi':17},
                     'sha256':{p:hashlib.sha256(v).hexdigest() for p,v in contents.items()}}
           contents['www/manifest.json']=(json.dumps(manifest,indent=2)+'\n').encode('utf-8')
           with zipfile.ZipFile(d/'sdcard.zip','w',compression=zipfile.ZIP_DEFLATED) as z:
