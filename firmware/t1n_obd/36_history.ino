@@ -5,6 +5,37 @@
   Never erases or writes the NVS, OTA partition, or bootloader.
 */
 #include <SPIFFS.h>
+#include <SD.h>
+#include <FS.h>
+// The existing scanner code mounts SD before starting history. Never autoformat
+// external or internal storage: failure is reported, not silently erased.
+bool sdCardReady();
+static fs::FS *hFs=nullptr;
+static bool hUsingSD=false;
+static uint32_t hVerifiedWrites=0,hWriteErrors=0;
+static uint32_t hClockAnchorEpoch=0,hClockAnchorMs=0,hClockJumps=0;
+static String hClockSource="unverified";
+String historyPath(const char *name){
+  return hUsingSD ? String("/t1nlogs")+name : String(name);
+}
+String historyClockJson(){
+  uint32_t now=historyNow();
+  return "{\"valid\":"+String(now?"true":"false")
+    +",\"epoch\":"+String(now)+",\"uptimeMs\":"+String(millis())
+    +",\"source\":\""+hClockSource+"\",\"jumps\":"+String(hClockJumps)
+    +",\"offlinePowerLossSafe\":false}";
+}
+void historyClockTick(){
+  const uint32_t now=historyNow(),ms=millis();
+  if(!now)return;
+  if(!hClockAnchorEpoch){hClockAnchorEpoch=now;hClockAnchorMs=ms;
+    if(hClockSource=="unverified")hClockSource="system-time (verify sync source)";
+  }else if(ms-hClockAnchorMs>=60000UL){
+    int64_t expected=(int64_t)hClockAnchorEpoch+(uint32_t)((ms-hClockAnchorMs)/1000UL);
+    if(llabs((int64_t)now-expected)>5)hClockJumps++;
+    hClockAnchorEpoch=now;hClockAnchorMs=ms;
+  }
+}
 #include <time.h>
 #include <sys/time.h>
 #include <math.h>
@@ -64,7 +95,7 @@ uint32_t historyNow(){
   return t>=1609459200LL&&t<4102444800LL?(uint32_t)t:0;
 }
 void historyRecover(HistoryRing &r){
-  File f=SPIFFS.open(r.path,"r");if(!f)return;
+  File f=hFs->open(historyPath(r.path),"r");if(!f)return;
   r.used=min((size_t)r.capacity,f.size()/sizeof(HistoryRecord));
   uint32_t newest=0;uint16_t last=0;
   for(uint16_t slot=0;slot<r.used;slot++){
@@ -79,7 +110,7 @@ void historyRecover(HistoryRing &r){
   r.serial=newest+1;if(!r.serial)r.serial=1;
 }
 bool historyRead(HistoryRing &r,uint16_t slot,HistoryRecord &record){
-  File f=SPIFFS.open(r.path,"r");if(!f)return false;
+  File f=hFs->open(historyPath(r.path),"r");if(!f)return false;
   bool ok=f.seek((size_t)slot*sizeof(record),SeekSet)
     &&f.read((uint8_t*)&record,sizeof(record))==sizeof(record);
   f.close();return ok&&historyValid(record);
@@ -92,8 +123,8 @@ bool historyWrite(HistoryRing &r,uint16_t slot,HistoryRecord &record,bool advanc
   // SPIFFS append creates a new journal and extends it without seeking beyond EOF.
   // Existing/full ring slots use r+ for in-place replacement.
   bool append=advance && slot==r.used && r.used<r.capacity;
-  File f=SPIFFS.open(r.path,append?"a":"r+");
-  if(!f && slot==0 && r.used==0)f=SPIFFS.open(r.path,"w");
+  File f=hFs->open(historyPath(r.path),append?"a":"r+");
+  if(!f && slot==0 && r.used==0)f=hFs->open(historyPath(r.path),"w");
   if(!f){
     hError="Cannot open flash history journal: "+String(r.path);
     hNextWriteRetryMs=millis()+30000;
@@ -104,11 +135,13 @@ bool historyWrite(HistoryRing &r,uint16_t slot,HistoryRecord &record,bool advanc
   size_t written=positioned?f.write((const uint8_t*)&record,sizeof(record)):0;
   f.flush();f.close();
   if(written!=sizeof(record)){
+    hWriteErrors++;
     hError="Flash history write failed: "+String(r.path)+" ("+String(written)+"/"+String(sizeof(record))+" bytes)";
     hNextWriteRetryMs=millis()+30000;
     return false;
   }
   hError="";
+  hVerifiedWrites++;
   hNextWriteRetryMs=0;
   if(advance){
     if(r.used<r.capacity)r.used++;
@@ -162,7 +195,7 @@ void historySaveDay(HistorySensor &s){
 void historyStartDay(HistorySensor &s,uint32_t day){
   s.day=day;s.dailySlot=-1;s.dMin=0;s.dMax=0;s.dSum=0;s.dCount=0;s.dirty=false;
   HistoryRing &r=hRings[2];uint32_t newest=0;
-  File f=SPIFFS.open(r.path,"r");
+  File f=hFs->open(historyPath(r.path),"r");
   if(!f)return;
   for(uint16_t slot=0;slot<r.used;slot++){
     HistoryRecord v;
@@ -233,15 +266,23 @@ void historyObserve(const char *id,const ValueState &v){
   }
 }
 void historyBegin(){
-  // First use formats ONLY the dedicated SPIFFS data partition, not NVS/OTA.
-  hReady=SPIFFS.begin(true);
-  if(!hReady){hError="Unable to mount SPIFFS";return;}
-  if(SPIFFS.totalBytes()<80000){
-    hReady=false;hError="Flash history partition smaller than expected";
-    SPIFFS.end();return;
+  // SD is preferred. Never format media holding existing user files.
+  hUsingSD=sdCardReady();
+  if(hUsingSD){
+    if(!SD.exists("/t1nlogs") && !SD.mkdir("/t1nlogs")){
+      hError="Cannot create SD /t1nlogs";hUsingSD=false;
+    }else{
+      hFs=&SD;hReady=true;
+      hRings[0].capacity=32000;hRings[1].capacity=32000;hRings[2].capacity=16000;
+    }
+  }
+  if(!hReady){
+    if(!SPIFFS.begin(false)){hError="SD unavailable, existing SPIFFS will not mount; no formatting";return;}
+    hFs=&SPIFFS;hReady=true;
   }
   for(auto &r:hRings)historyRecover(r);
-  // NTP runs asynchronously. The browser also supplies UTC for offline use.
+  // Use NTP when reachable. Offline power cycles require an external RTC for
+  // authoritative wall time; until synchronized, do not invent timestamps.
   configTime(0,0,"pool.ntp.org","time.google.com");
 }
 void historyTick(){
@@ -249,6 +290,7 @@ void historyTick(){
   uint32_t ms=millis();
   if(ms-hLastTick<1000)return;
   hLastTick=ms;
+  historyClockTick();
   if(hLastModule!=(int)activeModule){
     if(hLastModule>=0)historyCloseModule();
     hLastModule=(int)activeModule;
@@ -262,8 +304,11 @@ void historyTick(){
 String historyStatusJson(){
   String s="{\"enabled\":"+String(hReady?"true":"false")
     +",\"timeReady\":"+String(historyNow()?"true":"false")
-    +",\"capacityBytes\":"+String(hReady?SPIFFS.totalBytes():0)
-    +",\"usedBytes\":"+String(hReady?SPIFFS.usedBytes():0)
+    +",\"storage\":\""+String(hUsingSD?"microSD":"internal SPIFFS")+"\""
+    +",\"capacityBytes\":"+String(hReady?(hUsingSD?SD.totalBytes():SPIFFS.totalBytes()):0)
+    +",\"usedBytes\":"+String(hReady?(hUsingSD?SD.usedBytes():SPIFFS.usedBytes()):0)
+    +",\"successfulWrites\":"+String(hVerifiedWrites)+",\"writeErrors\":"+String(hWriteErrors)
+    +",\"clock\":"+historyClockJson()
     +",\"error\":\""+jsonEscape(hError)+"\",\"tiers\":[";
   for(int i=0;i<3;i++){
     if(i)s+=",";
@@ -277,7 +322,7 @@ String historyStatusJson(){
 // are included only outside newer tiers' windows to avoid double plotting.
 String historyDataJson(uint8_t module,const String &id,const String &range){
   if(!hReady)return "{\"error\":\"History storage unavailable\",\"points\":[]}";
-  if(id.length()==0||id.length()>50||module>2)return "{\"error\":\"Invalid sensor\",\"points\":[]}";
+  if(id.length()==0||id.length()>50||module>5)return "{\"error\":\"Invalid sensor\",\"points\":[]}";
   uint32_t now=historyNow();
   if(!now)return "{\"error\":\"Clock not synchronized\",\"points\":[]}";
   uint32_t span=range=="1h"?3600UL:range=="24h"?86400UL:
@@ -290,7 +335,7 @@ String historyDataJson(uint8_t module,const String &id,const String &range){
     if(range=="1h"&&tier==2)continue;
     if(range=="24h"&&tier==2)continue;
     HistoryRing &ring=hRings[tier];
-    File f=SPIFFS.open(ring.path,"r");if(!f)continue;
+    File f=hFs->open(historyPath(ring.path),"r");if(!f)continue;
     for(uint16_t j=0;j<ring.used;j++){
       uint16_t slot=ring.used==ring.capacity?(ring.next+j)%ring.capacity:j;
       HistoryRecord r;
@@ -319,5 +364,7 @@ String historyDataJson(uint8_t module,const String &id,const String &range){
 bool historySetClock(uint32_t seconds){
   if(seconds<1760000000UL||seconds>4102444800UL)return false;
   struct timeval tv={};tv.tv_sec=seconds;
-  return settimeofday(&tv,nullptr)==0;
+  bool ok=settimeofday(&tv,nullptr)==0;
+  if(ok){hClockSource="browser/manual";hClockAnchorEpoch=seconds;hClockAnchorMs=millis();}
+  return ok;
 }
