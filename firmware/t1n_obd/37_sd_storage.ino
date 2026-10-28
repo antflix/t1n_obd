@@ -33,8 +33,8 @@ String sdStatusJson() {
     +",\"error\":\""+jsonEscape(sdLastError)+"\"";
   if(sdReady){
     out+=",\"cardType\":"+String((int)SD.cardType())
-      +",\"capacityBytes\":"+String((uint64_t)SD.totalBytes())
-      +",\"usedBytes\":"+String((uint64_t)SD.usedBytes());
+      +",\"capacityMiB\":"+String((unsigned long)(SD.totalBytes()/1048576ULL))
+      +",\"usedMiB\":"+String((unsigned long)(SD.usedBytes()/1048576ULL));
   }
   const char* names[]={"index.html","advanced.html","manifest.json"};
   out+=",\"files\":[";
