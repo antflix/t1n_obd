@@ -27,21 +27,25 @@ static uint32_t monDtcEvents=0,monLastClockLogMs=0;
 static String monLastError="";
 static KlineIgnitionGate monIgnition;
 static uint32_t monIgnitionSampleMs=0;
-static uint32_t monFailureWindowMs=0;
-static uint8_t monEngineFailuresInWindow=0;
-// ABS RXD failed to follow a commanded LOW during the vehicle test.
-// Keep the ABS scheduler disabled until physical channel repair is verified.
+// Do not permanently disable logging after intermittent faults. Only failed
+// attempts since the last *persisted real engine sample* count as consecutive.
+static uint8_t monConsecutiveEngineFailures=0;
+static uint32_t monEngineRecoveries=0;
+static uint32_t monLastEngineSampleMs=0;
+// ABS channel produced intermittent failures in field tests, so it must
+// remain excluded from unattended visits until separately qualified.
 static const bool monAbsChannelQualified=false;
-void monitorFailureBudget(){
-  uint32_t now=millis();
-  if(!monFailureWindowMs||now-monFailureWindowMs>1200000UL){
-    monFailureWindowMs=now;monEngineFailuresInWindow=0;
+uint32_t monitorEngineFailureBackoff(){
+  if(monConsecutiveEngineFailures<255)monConsecutiveEngineFailures++;
+  const uint32_t delayMs=monConsecutiveEngineFailures==1?15000UL:
+    monConsecutiveEngineFailures==2?45000UL:
+    monConsecutiveEngineFailures==3?120000UL:300000UL;
+  if(monConsecutiveEngineFailures>=3){
+    monitorLog("COOLDOWN",MOD_ENGINE,
+      "Consecutive engine failures="+String(monConsecutiveEngineFailures)+
+      "; retry after "+String(delayMs/1000UL)+"s");
   }
-  if(++monEngineFailuresInWindow>=3){
-    monitorLog("SAFETY_STOP",MOD_ENGINE,"3 engine connection failures inside 20 minutes");
-    monLastError="Auto monitor disabled: 3 engine failures in 20 min";
-    monitorSetEnabled(false);
-  }
+  return delayMs;
 }
 
 bool monitorManualHold(){
@@ -54,6 +58,15 @@ void monitorManualOverride(){
 }
 void monitorPersistedSample(uint8_t mod){
   if(mod<6)monModules[mod].recentWrites++;
+  if(mod==MOD_ENGINE){
+    monLastEngineSampleMs=millis();
+    if(monConsecutiveEngineFailures){
+      monEngineRecoveries++;
+      monConsecutiveEngineFailures=0;
+      monLastError="";
+      monitorLog("RECOVERED",MOD_ENGINE,"Real engine sample persisted; failure streak cleared");
+    }
+  }
 }
 void monitorLog(const String &type,ModuleId mod,const String &detail){
   if(!sdCardReady())return;
@@ -168,11 +181,11 @@ void monitorStart(ModuleId mod){
   if(!ok){
     monModules[(uint8_t)mod].failures++;
     monLastError=lastError;
-    if(mod==MOD_ENGINE)monitorFailureBudget();
+    uint32_t cooldown=mod==MOD_ENGINE?monitorEngineFailureBackoff():1000UL;
     monitorLog("CONNECT_FAILED",mod,lastError);
-    // A failed secondary visit must not leave the engine offline for 30 s.
+    // A failed secondary visit must not leave the engine offline for long.
     monTarget=MOD_ENGINE;
-    monRetryMs=now+(mod==MOD_ENGINE?30000UL:1000UL);
+    monRetryMs=now+cooldown;
     monOwnSession=false;
     return;
   }
@@ -226,10 +239,11 @@ void monitorTick(){
     if(monOwnSession){
       monModules[(uint8_t)monTarget].failures++;
       monitorLog("SESSION_LOST",monTarget,lastError);
-      if(monTarget==MOD_ENGINE)monitorFailureBudget();
+      uint32_t cooldown=monTarget==MOD_ENGINE?
+        monitorEngineFailureBackoff():1000UL;
       monOwnSession=false;
       monTarget=MOD_ENGINE;
-      monRetryMs=now+10000UL;
+      monRetryMs=now+cooldown;
     }
     if((int32_t)(now-monRetryMs)>=0)monitorStart(monTarget);
     return;
@@ -267,7 +281,12 @@ String monitorStatusJson(){
     +",\"ignitionLowObserved\":"+String(monIgnition.sawLow?"true":"false")
     +",\"ignitionQualified\":"+String(monIgnition.sawLow?"true":"false")
     +",\"absAutoQualified\":"+String(monAbsChannelQualified?"true":"false")
-    +",\"engineFailuresInWindow\":"+String(monEngineFailuresInWindow)
+    +",\"consecutiveEngineFailures\":"+String(monConsecutiveEngineFailures)
+    +",\"engineRecoveries\":"+String(monEngineRecoveries)
+    +",\"engineLastSampleUptimeMs\":"+String(monLastEngineSampleMs)
+    +",\"engineRetryInSeconds\":"+String(
+      monConsecutiveEngineFailures && (int32_t)(monRetryMs-millis())>0 ?
+      (monRetryMs-millis()+999UL)/1000UL : 0UL)
     +",\"active\":"+String(monOwnSession?"true":"false")
     +",\"target\":"+String((int)monTarget)
     +",\"clock\":"+historyClockJson()
