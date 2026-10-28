@@ -2,6 +2,24 @@
 
 Status: wiring design verified against live 4-channel K-line firmware; **not connected, programmed, or installed**. Specific card-module voltage requirements still need confirmation from the physical module.
 
+## Prepared stage-1 firmware and USB installer (2026-10-27)
+
+- Firmware: `1.10.17-sd-stage1`; GitHub release contains `firmware.bin`, `bootloader.bin`, `partitions.bin`, `sdcard.zip` and SHA-256 manifest.
+- The Home Assistant machine has matching verified release assets at `/home/ant/t1n-sd-stage1-release`, and an isolated esptool 4.9 environment at `/home/ant/.cache/t1n-esptool-env`.
+- SD GPIOs in firmware: CS22, CLK18, MISO19, MOSI25. `/api/sd/status` provides card mount, capacity and per-page presence. `/api/sd/test` performs a temporary read/write/verify/delete test (scanner disconnected). `/api/sd/upload?name=index.html` and matching `advanced.html` and `manifest.json` accept bounded file uploads into `/www`. `/api/sd/file?name=...` permits checksum readback. The old embedded UI still works if no card.
+- The SD asset bundle stores the *uncompressed full original pages*. `scripts/provision_sd.py --bundle /home/ant/t1n-sd-stage1-release/sdcard.zip` uploads all pages over the local network and checks the downloaded SHA-256 hashes; it refuses mismatched firmware versions.
+- For wired install, first run `/home/ant/.cache/t1n-esptool-env/bin/python scripts/usb_flash_sd.py --port <verified-ESP32-port>` to make a private 4 MiB backup and inspect existing partitions. After confirming the backup and partition compatibility, add `--flash --release-dir /home/ant/t1n-sd-stage1-release` to install selectively. The script refuses NVS layout changes and does not mass erase. **Do not automatically assume the existing FT232 serial adapter belongs to the ESP32.**
+- The new app binary is **1,353,504 bytes** and the new 1.875 MiB (1,966,080-byte) `app0` and `app1` partitions fit it. A wired USB partition update is required before OTA can accept this image.
+- The raw backup includes old SPIFFS history and NVS settings. The old SPIFFS journals may not be readable from the smaller new internal SPIFFS partition; migration of the history to SD is **not completed in stage 1**. Keep the backup private and intact until the journals are recovered and the history views verified. The new SD card initially carries only dashboard assets.
+
+## Before wiring or flashing
+
+- Confirm the photographed module is powered at 3.3 V only.
+- Use a FAT32 card and keep SPI wiring short; ensure the new wires do not short 12 V to GPIO or 3.3 V.
+- Disconnect power while soldering.
+- Do not connect the ESP32 to the van's OBD supply while using USB serial flashing unless the power and ground path is deliberately designed for it.
+- Stage 1 retains all existing K-line pin assignments and does not add any new diagnostic ECU commands.
+
 ## Why this change
 - Installed scanner 1.10.16-abs-km20 reports an OTA app cap of **1,310,720 bytes**, and history SPIFFS reports **1,318,001 bytes capacity** (60,491 bytes used on 2026-10-27).
 - GitHub CI compiles with `esp32:esp32:esp32:PartitionScheme=min_spiffs` for **1,966,080-byte app slots** but Arduino's compile limit is **not proof that the running chip has that partition table**. OTA never safely changes the partition table.
