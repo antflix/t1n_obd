@@ -45,6 +45,7 @@ void monitorTick();
 void monitorManualOverride();
 void monitorSetEnabled(bool on);
 bool monitorStorageSelfTest(String &report);
+bool monitorDtcSelfTest(String &report);
 String monitorStatusJson();
 String historyClockJson();
 
