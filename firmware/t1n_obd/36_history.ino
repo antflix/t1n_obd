@@ -10,6 +10,8 @@
 // The existing scanner code mounts SD before starting history. Never autoformat
 // external or internal storage: failure is reported, not silently erased.
 bool sdCardReady();
+uint32_t historyNow();
+void monitorPersistedSample(uint8_t module);
 static fs::FS *hFs=nullptr;
 static bool hUsingSD=false;
 static uint32_t hVerifiedWrites=0,hWriteErrors=0;
@@ -262,6 +264,7 @@ void historyObserve(const char *id,const ValueState &v){
     HistoryRecord event=historyMake(s.key,now,value,value,value,1);
     if(historyAppend(0,event)>=0){
       s.recentSet=true;s.lastSaved=value;s.lastWrite=now;
+      monitorPersistedSample((uint8_t)activeModule);
     }
   }
 }
