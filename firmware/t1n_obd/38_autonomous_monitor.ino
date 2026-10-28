@@ -243,27 +243,42 @@ String monitorStatusJson(){
 // Non-vehicle self-test: exercise each module's namespaced CRC record on the
 // mounted card, then remove temporary files. This never invents ECU samples.
 bool monitorStorageSelfTest(String &report){
-  if(!sdCardReady()){report="microSD unavailable";return false;}
-  if(busy||jobConnect||diagnosticSession){report="Disconnect ECU before SD self-test";return false;}
-  uint8_t modules[]={0,2,1,3};
-  for(uint8_t module:modules){
-    String path="/t1nlogs/.module"+String(module)+".test";
-    SD.remove(path);
-    HistoryRecord item=historyMake(historyKey(module,"storage-selftest"),
-      1760000000UL,(float)module,(float)module,(float)module,1);
-    item.serial=1;item.checksum=historyChecksum(item);
-    File f=SD.open(path,"w");
-    if(!f){report="Cannot create "+path;return false;}
-    bool wrote=f.write((const uint8_t*)&item,sizeof(item))==sizeof(item);
-    f.flush();f.close();
-    HistoryRecord readback={};
-    f=SD.open(path,"r");
-    bool ok=wrote&&f && f.read((uint8_t*)&readback,sizeof(readback))==sizeof(readback)
-      &&memcmp(&item,&readback,sizeof(item))==0&&historyValid(readback);
-    if(f)f.close();
-    SD.remove(path);
-    if(!ok){report="Readback/CRC failed for module "+String(module);return false;}
+  if(!sdCardReady()||!hReady||!hUsingSD){
+    report="SD history backend unavailable";return false;
   }
-  report="4/4 module CRC storage patterns wrote, read, verified and deleted (synthetic, not ECU data)";
+  if(busy||jobConnect||diagnosticSession){
+    report="Disconnect ECU before storage self-test";return false;
+  }
+  const uint8_t modules[]={0,2,1,3};
+  for(uint8_t mod:modules){
+    String label="/.module"+String(mod)+".test";
+    String path=historyPath(label.c_str());
+    SD.remove(path);
+    // Exercise exactly the same SD File modes and CRC routines as real
+    // history journals: append twice, wrap and overwrite an existing slot.
+    HistoryRing ring={label.c_str(),2};
+    bool ok=true;
+    for(uint32_t step=0;step<3;step++){
+      HistoryRecord record=historyMake(historyKey(mod,"storage-selftest"),
+        1760000000UL+step,mod+step,mod+step,mod+step,1);
+      record.serial=step+1;
+      if(!historyWrite(ring,ring.next,record,true)){ok=false;break;}
+    }
+    HistoryRecord check={};
+    if(ok){
+      ok=ring.used==2 && ring.next==1 &&
+        historyRead(ring,0,check) && check.serial==3 &&
+        check.key==historyKey(mod,"storage-selftest");
+    }
+    File file=SD.open(path,FILE_READ);
+    if(ok)ok=file&&file.size()==2*sizeof(HistoryRecord);
+    if(file)file.close();
+    SD.remove(path);
+    if(!ok){
+      report="CRC append/overwrite/readback failed for module "+String(mod);
+      return false;
+    }
+  }
+  report="4/4 modules verified actual CRC ring append, wrap, overwrite and readback";
   return true;
 }
