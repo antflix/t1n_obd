@@ -6,6 +6,7 @@
 #include <time.h>
 #include "monitor_dtc_diff.h"
 #include "monitor_ignition_gate.h"
+#include "monitor_retry_policy.h"
 extern uint32_t lastDtcScanMs; // defined in 90_setup.ino
 void monitorLog(const String &type,ModuleId mod,const String &detail);
 void monitorSetEnabled(bool enable);
@@ -29,20 +30,16 @@ static KlineIgnitionGate monIgnition;
 static uint32_t monIgnitionSampleMs=0;
 // Do not permanently disable logging after intermittent faults. Only failed
 // attempts since the last *persisted real engine sample* count as consecutive.
-static uint8_t monConsecutiveEngineFailures=0;
-static uint32_t monEngineRecoveries=0;
+static MonitorRetryPolicy monEngineRetry;
 static uint32_t monLastEngineSampleMs=0;
 // ABS channel produced intermittent failures in field tests, so it must
 // remain excluded from unattended visits until separately qualified.
 static const bool monAbsChannelQualified=false;
 uint32_t monitorEngineFailureBackoff(){
-  if(monConsecutiveEngineFailures<255)monConsecutiveEngineFailures++;
-  const uint32_t delayMs=monConsecutiveEngineFailures==1?15000UL:
-    monConsecutiveEngineFailures==2?45000UL:
-    monConsecutiveEngineFailures==3?120000UL:300000UL;
-  if(monConsecutiveEngineFailures>=3){
+  const uint32_t delayMs=monEngineRetry.onFailure();
+  if(monEngineRetry.consecutive>=3){
     monitorLog("COOLDOWN",MOD_ENGINE,
-      "Consecutive engine failures="+String(monConsecutiveEngineFailures)+
+      "Consecutive engine failures="+String(monEngineRetry.consecutive)+
       "; retry after "+String(delayMs/1000UL)+"s");
   }
   return delayMs;
@@ -60,9 +57,7 @@ void monitorPersistedSample(uint8_t mod){
   if(mod<6)monModules[mod].recentWrites++;
   if(mod==MOD_ENGINE){
     monLastEngineSampleMs=millis();
-    if(monConsecutiveEngineFailures){
-      monEngineRecoveries++;
-      monConsecutiveEngineFailures=0;
+    if(monEngineRetry.onRealSample()){
       monLastError="";
       monitorLog("RECOVERED",MOD_ENGINE,"Real engine sample persisted; failure streak cleared");
     }
@@ -281,11 +276,11 @@ String monitorStatusJson(){
     +",\"ignitionLowObserved\":"+String(monIgnition.sawLow?"true":"false")
     +",\"ignitionQualified\":"+String(monIgnition.sawLow?"true":"false")
     +",\"absAutoQualified\":"+String(monAbsChannelQualified?"true":"false")
-    +",\"consecutiveEngineFailures\":"+String(monConsecutiveEngineFailures)
-    +",\"engineRecoveries\":"+String(monEngineRecoveries)
+    +",\"consecutiveEngineFailures\":"+String(monEngineRetry.consecutive)
+    +",\"engineRecoveries\":"+String(monEngineRetry.recoveries)
     +",\"engineLastSampleUptimeMs\":"+String(monLastEngineSampleMs)
     +",\"engineRetryInSeconds\":"+String(
-      monConsecutiveEngineFailures && (int32_t)(monRetryMs-millis())>0 ?
+      monEngineRetry.consecutive && (int32_t)(monRetryMs-millis())>0 ?
       (monRetryMs-millis()+999UL)/1000UL : 0UL)
     +",\"active\":"+String(monOwnSession?"true":"false")
     +",\"target\":"+String((int)monTarget)
