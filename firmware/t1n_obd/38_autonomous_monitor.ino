@@ -161,6 +161,13 @@ void monitorStart(ModuleId mod){
   }
 }
 void monitorTick(){
+  // A heartbeat records whether real UTC was available when monitoring ran.
+  // The clock API clearly marks hard power-loss recovery as unsupported.
+  if(sdCardReady() && millis()-monLastClockLogMs>=300000UL){
+    monLastClockLogMs=millis();
+    monitorLog("CLOCK",monTarget,
+      String("epoch=")+historyNow()+";source="+historyClockJson());
+  }
   if(!monEnabled||monitorManualHold()||busy||jobConnect||hzrFanOverrideActive)return;
   uint32_t now=millis();
   if(!monOwnSession&&diagnosticSession){
@@ -213,4 +220,32 @@ String monitorStatusJson(){
       +",\"dtcCount\":"+String(m.dtcCount)+"}";
   }
   return s+"]}";
+}
+
+// Non-vehicle self-test: exercise each module's namespaced CRC record on the
+// mounted card, then remove temporary files. This never invents ECU samples.
+bool monitorStorageSelfTest(String &report){
+  if(!sdCardReady()){report="microSD unavailable";return false;}
+  if(busy||jobConnect||diagnosticSession){report="Disconnect ECU before SD self-test";return false;}
+  uint8_t modules[]={0,2,1,3};
+  for(uint8_t module:modules){
+    String path="/t1nlogs/.module"+String(module)+".test";
+    SD.remove(path);
+    HistoryRecord item=historyMake(historyKey(module,"storage-selftest"),
+      1760000000UL,(float)module,(float)module,(float)module,1);
+    item.serial=1;item.checksum=historyChecksum(item);
+    File f=SD.open(path,"w");
+    if(!f){report="Cannot create "+path;return false;}
+    bool wrote=f.write((const uint8_t*)&item,sizeof(item))==sizeof(item);
+    f.flush();f.close();
+    HistoryRecord readback={};
+    f=SD.open(path,"r");
+    bool ok=wrote&&f && f.read((uint8_t*)&readback,sizeof(readback))==sizeof(readback)
+      &&memcmp(&item,&readback,sizeof(item))==0&&historyValid(readback);
+    if(f)f.close();
+    SD.remove(path);
+    if(!ok){report="Readback/CRC failed for module "+String(module);return false;}
+  }
+  report="4/4 module CRC storage patterns wrote, read, verified and deleted (synthetic, not ECU data)";
+  return true;
 }
