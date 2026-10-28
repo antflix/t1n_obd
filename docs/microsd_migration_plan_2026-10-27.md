@@ -6,7 +6,7 @@ Status: wiring design verified against live 4-channel K-line firmware; **not con
 
 - Firmware: `1.10.17-sd-stage1`; GitHub release contains `firmware.bin`, `bootloader.bin`, `partitions.bin`, `sdcard.zip` and SHA-256 manifest.
 - The Home Assistant machine has matching verified release assets at `/home/ant/t1n-sd-stage1-release`, and an isolated esptool 4.9 environment at `/home/ant/.cache/t1n-esptool-env`.
-- SD GPIOs in firmware: CS22, CLK18, MISO19, MOSI25. `/api/sd/status` provides card mount, capacity and per-page presence. `/api/sd/test` performs a temporary read/write/verify/delete test (scanner disconnected). `/api/sd/upload?name=index.html` and matching `advanced.html` and `manifest.json` accept bounded file uploads into `/www`. `/api/sd/file?name=...` permits checksum readback. The old embedded UI still works if no card.
+- SD GPIOs in firmware: CS22, CLK18, MISO19, MOSI17. `/api/sd/status` provides card mount, capacity and per-page presence. `/api/sd/test` performs a temporary read/write/verify/delete test (scanner disconnected). `/api/sd/upload?name=index.html` and matching `advanced.html` and `manifest.json` accept bounded file uploads into `/www`. `/api/sd/file?name=...` permits checksum readback. The old embedded UI still works if no card.
 - The SD asset bundle stores the *uncompressed full original pages*. `scripts/provision_sd.py --bundle /home/ant/t1n-sd-stage1-release/sdcard.zip` uploads all pages over the local network and checks the downloaded SHA-256 hashes; it refuses mismatched firmware versions.
 - For wired install, first run `/home/ant/.cache/t1n-esptool-env/bin/python scripts/usb_flash_sd.py --port <verified-ESP32-port>` to make a private 4 MiB backup and inspect existing partitions. After confirming the backup and partition compatibility, add `--flash --release-dir /home/ant/t1n-sd-stage1-release` to install selectively. The script refuses NVS layout changes and does not mass erase. **Do not automatically assume the existing FT232 serial adapter belongs to the ESP32.**
 - The new app binary is **1,353,504 bytes** and the new 1.875 MiB (1,966,080-byte) `app0` and `app1` partitions fit it. A wired USB partition update is required before OTA can accept this image.
@@ -33,19 +33,19 @@ Status: wiring design verified against live 4-channel K-line firmware; **not con
 | EGS, OBD11 | 26 | 21 |
 | ABS/EWM, OBD9 | 33 | 32 |
 
-None of GPIO18, GPIO19, GPIO25 or GPIO22 is assigned in existing sketch code. Verify actual board breakout and any off-repository wires before connecting.
+None of GPIO18, GPIO19, GPIO17 or GPIO22 is assigned in existing sketch code. Verify actual board breakout and any off-repository wires before connecting.
 
 ## Proposed microSD via SPI (pins subject to actual board verification)
 | microSD module marking | ESP32 Dev Module |
 | --- | --- |
 | SCK / CLK | GPIO18 |
 | MISO / DO | GPIO19 |
-| MOSI / DI | GPIO25 (GPIO23 belongs to engine K-line TX!) |
+| MOSI / DI | GPIO17 / TX2 (GPIO23 belongs to engine K-line TX!) |
 | CS / SS | GPIO22 |
 | GND | Common GND |
 | VCC | 3.3 V **only for 3.3V-rated modules**; other breakout boards may need 5 V supply to their onboard regulator and level shifting. Determine from photo/part number. |
 
-ESP32 SD-SPI Arduino API is configurable: `SPI.begin(18,19,25,22); SD.begin(22,SPI,4000000);` (start at 4 MHz then increase if stable). Use regulated stable power, short SPI wires and decoupling; avoid GPIO0/2/5/12/15 bootstrapping conflicts and currently used UART pins.
+ESP32 SD-SPI Arduino API is configurable: `SPI.begin(18,19,17,22); SD.begin(22,SPI,4000000);` (start at 4 MHz then increase if stable). Use regulated stable power, short SPI wires and decoupling; avoid GPIO0/2/5/12/15 bootstrapping conflicts and currently used UART pins.
 
 ## Phased change, rollback safe
 1. **Bench hardware first.** Check VCC ratings, polarity, GPIO routes, continuity; test `SD.cardType()`, `SD.totalBytes()`, create+read+delete a small test file and reboot with/without card. Card FAT32. Do not put card SPI signals into any 12 V interface.
@@ -60,3 +60,18 @@ ESP32 SD-SPI Arduino API is configurable: `SPI.begin(18,19,25,22); SD.begin(22,S
 - Never attempt ABS actuation/programming/clear-DTC operations while testing storage.
 - No external logging/SD call should block time-sensitive K-line receive loops.
 - Put a version and checksum in SD UI and catalog asset manifest. Card removal should not crash scanner.
+
+## Final right-side wiring (board photo verified)
+
+User has chosen six connections all on the ESP32's right-hand header, as viewed with USB socket at bottom:
+
+| microSD pin | ESP32 right header label | GPIO |
+|---|---|---:|
+| 3V3 | 3V3 | 3.3 V rail |
+| CS | D22 | 22 |
+| MOSI | TX2 | 17 |
+| CLK | D18 | 18 |
+| MISO | D19 | 19 |
+| GND | GND | Ground |
+
+`TX2` is a usable GPIO17 even though it bears a UART alias; all four K-lines use independently assigned UART GPIOs (K_TX 23,27,21,32). No change to SD module voltage: 3.3 V only. This arrangement supersedes any previous MOSI25 references.
