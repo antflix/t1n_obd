@@ -137,8 +137,9 @@ void monitorStart(ModuleId mod){
     monModules[(uint8_t)mod].failures++;
     monLastError=lastError;
     monitorLog("CONNECT_FAILED",mod,lastError);
+    // A failed secondary visit must not leave the engine offline for 30 s.
     monTarget=MOD_ENGINE;
-    monRetryMs=now+30000UL;
+    monRetryMs=now+(mod==MOD_ENGINE?30000UL:1000UL);
     monOwnSession=false;
     return;
   }
@@ -166,6 +167,15 @@ void monitorTick(){
     return;
   }
   if(!diagnosticSession){
+    // A dropped session is not a clean scheduled disconnect. Back off
+    // instead of retrying on every 2-ms loop iteration.
+    if(monOwnSession){
+      monModules[(uint8_t)monTarget].failures++;
+      monitorLog("SESSION_LOST",monTarget,lastError);
+      monOwnSession=false;
+      monTarget=MOD_ENGINE;
+      monRetryMs=now+10000UL;
+    }
     if((int32_t)(now-monRetryMs)>=0)monitorStart(monTarget);
     return;
   }
