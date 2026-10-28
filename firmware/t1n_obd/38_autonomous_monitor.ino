@@ -282,3 +282,25 @@ bool monitorStorageSelfTest(String &report){
   report="4/4 modules verified actual CRC ring append, wrap, overwrite and readback";
   return true;
 }
+
+bool monitorDtcSelfTest(String &report){
+  // Pure in-memory comparison only: does NOT touch ECU, SD journals or NVS.
+  MonitorDtcItem oldRecords[2]={{0x1187,0x60},{0x1401,0x20}};
+  MonitorDtcItem reordered[2]={{0x1401,0x20},{0x1187,0x60}};
+  MonitorDtcItem changed[2]={{0x1187,0x40},{0x1401,0x20}};
+  MonitorDtcItem added[3]={{0x1187,0x60},{0x1401,0x20},{0x1612,0x40}};
+  MonitorDtcItem removed[1]={{0x1401,0x20}};
+  MonitorDtcChange output[64]={};
+  bool ok=monitorDiffDtc(oldRecords,2,false,oldRecords,2,output,64)==2
+    &&output[0].kind==MON_DTC_BASELINE
+    &&monitorDiffDtc(oldRecords,2,true,reordered,2,output,64)==0;
+  size_t n=monitorDiffDtc(oldRecords,2,true,changed,2,output,64);
+  ok=ok&&n==1&&output[0].kind==MON_DTC_STATUS_CHANGED;
+  n=monitorDiffDtc(oldRecords,2,true,added,3,output,64);
+  ok=ok&&n==1&&output[0].kind==MON_DTC_NEW;
+  n=monitorDiffDtc(oldRecords,2,true,removed,1,output,64);
+  ok=ok&&n==1&&output[0].kind==MON_DTC_NOT_REPORTED;
+  report=ok?"DTC baseline, reordering, new, changed and no-longer-reported: PASS (synthetic, no ECU access)"
+    :"DTC comparison failed on ESP32";
+  return ok;
+}
