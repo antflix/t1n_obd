@@ -4,6 +4,7 @@
 #include <Preferences.h>
 #include <SD.h>
 #include <time.h>
+#include "monitor_dtc_diff.h"
 extern uint32_t lastDtcScanMs; // defined in 90_setup.ino
 
 struct MonModule {
@@ -90,36 +91,25 @@ void monitorDtcEvent(uint8_t mod,uint16_t code,uint8_t status,const char *change
 void monitorDtcSnapshot(uint8_t mod,const uint16_t *codes,const uint8_t *statuses,uint8_t count){
   if((mod!=0&&mod!=2)||count>32)return;
   MonModule &m=monModules[mod];
-  const bool baseline=m.dtcBaseline;
-  bool changed=!baseline || count!=m.dtcCount;
-  // Compare as a set so ECU record ordering does not generate false alerts.
-  for(uint8_t i=0;i<count;i++){
-    bool seen=false;
-    for(uint8_t j=0;j<m.dtcCount;j++)if(m.codes[j]==codes[i]){
-      seen=true;
-      if(m.statuses[j]!=statuses[i]){
-        changed=true;
-        if(baseline)monitorDtcEvent(mod,codes[i],statuses[i],"STATUS_CHANGED");
-      }
-      break;
-    }
-    if(!seen){
-      changed=true;
-      monitorDtcEvent(mod,codes[i],statuses[i],baseline?"NEW":"BASELINE");
-    }
-  }
-  if(baseline)for(uint8_t j=0;j<m.dtcCount;j++){
-    bool found=false;
-    for(uint8_t i=0;i<count;i++)if(codes[i]==m.codes[j]){found=true;break;}
-    if(!found){changed=true;monitorDtcEvent(mod,m.codes[j],m.statuses[j],"NOT_REPORTED");}
+  MonitorDtcItem previous[32],current[32];
+  for(uint8_t j=0;j<m.dtcCount;j++)previous[j]={m.codes[j],m.statuses[j]};
+  for(uint8_t i=0;i<count;i++)current[i]={codes[i],statuses[i]};
+  MonitorDtcChange events[64];
+  size_t n=monitorDiffDtc(previous,m.dtcCount,m.dtcBaseline,
+                          current,count,events,64);
+  bool changed=!m.dtcBaseline || count!=m.dtcCount || n!=0;
+  for(size_t i=0;i<n;i++){
+    const char *kind=events[i].kind==MON_DTC_NEW?"NEW":
+                     events[i].kind==MON_DTC_STATUS_CHANGED?"STATUS_CHANGED":
+                     events[i].kind==MON_DTC_NOT_REPORTED?"NOT_REPORTED":"BASELINE";
+    monitorDtcEvent(mod,events[i].code,events[i].status,kind);
   }
   m.dtcCount=count;
   for(uint8_t i=0;i<count;i++){m.codes[i]=codes[i];m.statuses[i]=statuses[i];}
   m.dtcBaseline=true;
   m.lastDtcUptimeMs=millis();m.lastDtcEpoch=historyNow();
   if(changed)monitorSaveDtcSnapshot(mod);
-  // Unsupported/failed reads never enter this function and therefore never
-  // imply that a module has zero faults.
+  // Unsupported/failed reads never enter this function.
 }
 void monitorBegin(){
   Preferences p;
