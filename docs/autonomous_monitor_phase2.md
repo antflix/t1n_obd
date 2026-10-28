@@ -51,3 +51,15 @@ Endpoints: `GET /api/monitor/status`, `GET /api/monitor/clock`, `POST /api/monit
 - Verify real ECU sample rates and safe session timing before making a permanent release.
 - Investigate ABS/HVAC DTC-read services from vehicle-specific captures and verified CBF mappings; do not guess protocol requests.
 - Implement real alert thresholding and dedicated display after baseline logs are available.
+
+## CI verification outcome — 2026-10-28
+
+[GitHub Actions run 40742098933](https://github.com/antflix/t1n_obd/actions/runs/40742098933) **passed** on commit `a3367e31`:
+- Native DTC transition tests: PASS (baseline, unchanged, reordered, status change, new, no-longer-reported, empty, event-buffer bounds).
+- ESP32 Arduino 3.3.12 compilation: PASS.
+- Program image: **1,365,992 bytes**, 69% of the 1,966,080-byte partition.
+- Static global RAM: **102,160 bytes**, 31% of the 327,680-byte budget.
+- Test artifact: `t1n-autolog-test`; upload succeeded. Moving production `latest` release was skipped.
+- Full hardware validation is **NOT** complete because the Home Assistant Remote Desktop Commander device went offline. No ESP32 flash of this branch, SD self-test on the chip, four-module real history samples, ignition tests, or power-cycle clock accuracy tests have been performed.
+
+The existing production ESP32 remains on `1.10.17-sd-stage1`. Stage 2 is deliberately held as a draft PR pending on-device verification. Clock reliability through a power loss without WAN still requires an external battery-backed RTC; a passing compile does not change that.
