@@ -75,7 +75,8 @@ struct HistorySensor {
   int16_t dailySlot=-1;
   bool recentSet=false,dirty=false;
 };
-static HistorySensor hSensors[100];
+static HistorySensor hSensors[160];
+static uint32_t hSensorOverflow=0;
 
 uint32_t historyKey(uint8_t module,const char *name){
   uint32_t h=2166136261UL;
@@ -177,6 +178,7 @@ float historyDelta(const String &unit,float v){
 HistorySensor *historySensor(uint32_t key){
   for(auto &s:hSensors)if(s.key==key)return &s;
   for(auto &s:hSensors)if(!s.key){s=HistorySensor();s.key=key;return &s;}
+  hSensorOverflow++;
   return nullptr;
 }
 void historySaveDay(HistorySensor &s){
@@ -317,6 +319,8 @@ String historyStatusJson(){
       ((uint32_t)hRings[0].used+hRings[1].used+hRings[2].used)*sizeof(HistoryRecord):
       (uint32_t)SPIFFS.usedBytes()):0)
     +",\"successfulWrites\":"+String(hVerifiedWrites)+",\"writeErrors\":"+String(hWriteErrors)
+    +",\"sensorCapacity\":"+String((unsigned)(sizeof(hSensors)/sizeof(hSensors[0])))
+    +",\"sensorOverflow\":"+String(hSensorOverflow)
     +",\"clock\":"+historyClockJson()
     +",\"error\":\""+jsonEscape(hError)+"\",\"tiers\":[";
   for(int i=0;i<3;i++){
