@@ -181,7 +181,13 @@ void monitorTick(){
   if((int32_t)(now-monEgsDue)>=0){
     monEgsDue=now+240000UL;monitorStart(MOD_EGS);return;
   }
-  if((int32_t)(now-monAbsDue)>=0){
+  // Do not enter ABS diagnostic mode automatically while driving until
+  // its side effects have been vehicle-qualified. A speed reading must be
+  // fresh; missing/stale speed never implies that the vehicle is parked.
+  bool stationary=engSpeed.valid && !stale(engSpeed,5000)
+    && engSpeed.value>=0 && engSpeed.value<1.0
+    && engRpm.valid && !stale(engRpm,5000) && engRpm.value>450;
+  if(stationary && (int32_t)(now-monAbsDue)>=0){
     monAbsDue=now+600000UL;monitorStart(MOD_ABS);return;
   }
   if((int32_t)(now-monHzrDue)>=0){
