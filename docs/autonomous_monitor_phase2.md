@@ -1,7 +1,7 @@
 # Autonomous SD monitor — stage 2 test firmware
 
 **Branch:** `feature/autonomous-sd-monitor-20261028`  
-**Firmware:** `1.10.18-autolog-test`  
+**Firmware:** `1.10.20-autolog-test`  
 **State:** Code implementation and CI compilation only until independently verified on hardware and with the van's ECUs. Do not treat a successful compile as completed on-vehicle qualification.
 
 ## Existing four K-lines
@@ -64,3 +64,20 @@ Endpoints: `GET /api/monitor/status`, `GET /api/monitor/clock`, `POST /api/monit
 - Full hardware validation is **NOT** complete because the Home Assistant Remote Desktop Commander device went offline. No ESP32 flash of this branch, SD self-test on the chip, four-module real history samples, ignition tests, or power-cycle clock accuracy tests have been performed.
 
 The existing production ESP32 remains on `1.10.17-sd-stage1`. Stage 2 is deliberately held as a draft PR pending on-device verification. Clock reliability through a power loss without WAN still requires an external battery-backed RTC; a passing compile does not change that.
+
+## Live ESP32 deployment validation — 2026-10-28
+
+**Installed on scanner** at `192.168.8.168`: `1.10.20-autolog-test`, artifact from [CI run 40752610834](https://github.com/antflix/t1n_obd/actions/runs/40752610834), git commit `0c912935a44ddef665c07614a92b5105d34ad295`. SHA-256 verified before OTA. OTA responded 200 and device rebooted into the expected firmware. Production GitHub `latest` remains unchanged; original 4 MiB flash backup and prior stage1 image retained off-device.
+
+**On-device smoke test: 14 PASS / 0 FAIL**, report `/home/ant/t1n-stage2-device-validation-20261028.json` on Home Assistant computer:
+
+- Physical SD mounted and all dashboard assets remained present.
+- `/api/history/status` reports microSD backend, 2,560,000 bytes of bounded CRC ring capacity, 160 active sensor slots, zero overflow.
+- For module IDs CR2=0, EGS=2, ABS=1, HZR=3, the *actual journal routines* appended, wrapped, overwrote, CRC-validated and read back records on SD; 12 history writes completed with zero errors. These are deliberately temporary **synthetic** records, not real ECU measurements; the self-test files were removed.
+- ESP32 in-memory DTC comparison self-test passed baseline, reordering, new, changed and no-longer-reported cases without affecting real DTC state; native CI DTC tests passed too.
+- UTC epoch matched Home Assistant computer within 0 seconds during the on-device test. An additional 30-second, seven-sample test on `1.10.18` kept UTC within 1 second and detected zero jumps. This verifies network-synchronized clock operation, **not** timestamp recovery after power loss without a network (requires battery-backed RTC).
+- Four history queries (CR2, EGS, ABS, HVAC) returned valid responses, **zero actual samples** because the scanner was not in an ECU session.
+
+**Not yet verified/activated:** Live ECU sessions, actual samples and module coverage, session switching while engine running, persistence of real records across reboot, real engine/EGS DTC reads/changes, ABS/HVAC fault-memory services (still unsupported), ignition-aware power behavior. Autonomous mode is **OFF by default** on this first test rollout and must be explicitly enabled when the van is safely parked with ignition on. Do not claim continuous monitoring is operating until this test gate passes.
+
+Old historical data preserved separately: **1,904 valid CRC journal records** recovered into private CSV `/home/ant/t1n-flash-backups/t1n-original-history-recovered-20261028.csv`, SHA-256 `fddf7671da81adc8b4f6d1d355782db9d2ab6648e0431bcfefb6b3b852f2e769`. Not yet merged with new SD history; original journal files and complete flash backup kept.
