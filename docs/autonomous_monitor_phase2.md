@@ -38,7 +38,8 @@ Startup: monitor enabled by default (NVS toggle), attempts the engine after a 12
 
 1. Confirm `GET /api/status` reports the test firmware, `/api/sd/status` reports mounted, and `/api/history/status` reports `storage=microSD`; verify normal dashboard and retained pre-existing SD contents.
 2. With *no ECU session active*, `POST /api/monitor/selftest` — expect **4/4** separate CRC files created, read, verified and deleted. This proves the SD paths, not actual module telemetry.
-3. `GET /api/monitor/clock` — verify against a known reliable clock, reboot and repeat with WAN unavailable. Confirm the unsynchronized flag is honest; compare elapsed uptime against elapsed epoch and inspect `jumps`.
+3. `POST /api/monitor/dtc/selftest` — expect synthetic DTC comparison PASS without writing any real fault records.
+4. `GET /api/monitor/clock` — verify against a known reliable clock, reboot and repeat with WAN unavailable. Confirm the unsynchronized flag is honest; compare elapsed uptime against elapsed epoch and inspect `jumps`.
 4. With ignition on and van stationary, monitor `GET /api/monitor/status`; verify each module has at least one connection and `historyWrites > 0`, and validate values with `/api/history/data` and SD ring readback. Ensure the main engine recovers after each auxiliary window, and requests do not cause K-line timeouts.
 5. For engine/EGS, verify complete DTC snapshots update last successful scan. Confirm no false new alert on identical repeat scans/restarts; verify NEW, STATUS_CHANGED and NOT_REPORTED with controlled fixtures before trusting alerts. For ABS/HVAC, verify `dtcSupported=false`, not "no codes."
 
