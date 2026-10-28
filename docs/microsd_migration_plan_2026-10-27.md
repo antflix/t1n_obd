@@ -1,6 +1,6 @@
 # ESP32 microSD migration — wiring, UI/assets, diagnostic history, partition layout
 
-Status: wiring design verified against live 4-channel K-line firmware; **not connected, programmed, or installed**. Specific card-module voltage requirements still need confirmation from the physical module.
+Status: **installed and verified on hardware (2026-10-28)** with SD mounted, dashboard assets uploaded and reboot persistence checked. Stage 1 does not migrate the diagnostic history journals to SD.
 
 ## Prepared stage-1 firmware and USB installer (2026-10-27)
 
@@ -75,3 +75,12 @@ User has chosen six connections all on the ESP32's right-hand header, as viewed 
 | GND | GND | Ground |
 
 `TX2` is a usable GPIO17 even though it bears a UART alias; all four K-lines use independently assigned UART GPIOs (K_TX 23,27,21,32). No change to SD module voltage: 3.3 V only. This arrangement supersedes any previous MOSI25 references.
+
+## Hardware deployment verification (2026-10-28)
+
+- The physical ESP32-D0WD-V3 was flashed with the verified `1.10.17-sd-stage1` GPIO17 build via its CP2102 USB serial connection, and the bootloader, partition table and application all passed flash hash verification. USB flashing worked at **115200 baud**; 460800 was unreliable.
+- Before changing partition sizes, a complete **4 MiB read-only backup** was captured in independently double-read 64 KiB chunks and preserved privately off-device. No credentials or backup bytes were committed to GitHub.
+- New OTA app partitions are **1,966,080 bytes each**. Existing NVS partition position and size were retained. The previous SPIFFS image was extracted privately and its three history journal files were recovered for later conversion.
+- SPI SD pins: CS GPIO22, CLK GPIO18, MISO GPIO19, MOSI GPIO17 (`TX2` label), power 3.3 V, common GND. `/api/sd/test` passed write/read/verify/delete, and `/www/index.html`, `/www/advanced.html`, `/www/manifest.json` were checksum-verified via the provisioning script. All files remained present and the SD-first UI worked after a deliberate reboot.
+- The inserted card already mounted successfully as a FAT filesystem and contained substantial existing data; **it was not reformatted**, because formatting was unnecessary and would erase that data.
+- **Remaining work:** SD history journaling/migration, autonomous ignition-aware prioritized polling, per-module connection scheduling, complete DTC transition history (ABS/HVAC DTC reads still unverified), alert engine, and separate compact display. Four transceivers still share a reassigned UART in the current firmware and only one ECU session is active at a time.
