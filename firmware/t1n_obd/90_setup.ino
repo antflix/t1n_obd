@@ -74,6 +74,10 @@ String wifiPage(){
 #endif
 
 void setupRoutes(){
+web.on("/api/sd/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",sdStatusJson());});
+web.on("/api/sd/test",HTTP_POST,[]{String msg;bool ok=sdTestCard(msg);web.send(ok?200:409,"text/plain",msg);});
+web.on("/api/sd/upload",HTTP_POST,sdUploadFinish,sdUploadChunk);
+web.on("/api/sd/file",HTTP_GET,sdServeAssetDownload);
 web.on("/api/hardware/lines",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",klineLogicJson());});
 web.on("/api/modules",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",modulesCatalogJson());});
 web.on("/api/module/groups",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",moduleGroupsJson());});
@@ -108,6 +112,7 @@ web.on("/wifi/save",HTTP_POST,[]{
   WiFi.disconnect();wifiConnectAttempts++;WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
 });
 web.on("/",HTTP_GET,[]{
+  if(sdServePage("/www/index.html"))return;
   web.sendHeader("Cache-Control","no-store");
 #ifdef T1N_USE_GZIP_PAGE
   web.sendHeader("Content-Encoding","gzip");
@@ -116,7 +121,7 @@ web.on("/",HTTP_GET,[]{
   web.send(200,"text/html; charset=utf-8",scannerPage());
 #endif
 });
-web.on("/advanced",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");
+web.on("/advanced",HTTP_GET,[]{if(sdServePage("/www/advanced.html"))return;web.sendHeader("Cache-Control","no-store");
 #ifdef T1N_USE_GZIP_PAGE
   web.sendHeader("Content-Encoding","gzip");
   web.send_P(200,"text/html; charset=utf-8",(const char*)ADVANCED_UI_GZIP,ADVANCED_UI_GZIP_LEN);
@@ -192,7 +197,7 @@ if(wifiSSID.length()){
 }
 // Always bring up the recovery AP, regardless of station success.
 WiFi.mode(WIFI_AP_STA);WiFi.softAP(apSSID.c_str(),apPASS.c_str());
-historyBegin();setupRoutes();web.begin();activity("T1N Scanner "+String(FIRMWARE_VERSION)+" booted");logx(String("T1N Scanner ")+FIRMWARE_VERSION+" ready");logx(String("AP http://")+WiFi.softAPIP().toString()+" | station "+(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():String("not connected")));setStatus("DISCONNECTED - SELECT MODULE");}
+historyBegin();sdInitialize();setupRoutes();web.begin();activity("T1N Scanner "+String(FIRMWARE_VERSION)+" booted");logx(String("T1N Scanner ")+FIRMWARE_VERSION+" ready");logx(String("AP http://")+WiFi.softAPIP().toString()+" | station "+(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():String("not connected")));setStatus("DISCONNECTED - SELECT MODULE");}
 void loop(){web.handleClient();hzrFanTick();if(jobConnect&&!busy){jobConnect=false;connectModule(requestedModule);}livePollTick();historyTick();if(diagnosticSession&&!busy&&(activeModule==MOD_ENGINE||activeModule==MOD_EGS)&&millis()-lastDtcScanMs>=15000){readDTCs();lastDtcScanMs=millis();}if(diagnosticSession&&activeModule!=MOD_ABS&&!busy&&!livePolling&&millis()-lastGoodTrafficMs>=cfg.keepaliveIntervalMs){busy=true;testerPresent();busy=false;}if(!diagnosticSession&&autoReconnect&&reconnectAtMs&&(int32_t)(millis()-reconnectAtMs)>=0&&!busy&&!jobConnect){reconnectAtMs=0;jobConnect=true;setStatus("AUTO RECONNECT QUEUED - "+moduleName(requestedModule));}if(wifiSSID.length()&&WiFi.status()!=WL_CONNECTED&&millis()-lastWifiRetryMs>90000){
  lastWifiRetryMs=millis();wifiConnectAttempts++;
  // Do not forcibly disconnect an already-connecting station every 30 seconds.
