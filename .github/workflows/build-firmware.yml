@@ -5,6 +5,7 @@ on:
     branches: [main, 'feature/autonomous-sd-monitor-20261028']
     paths:
       - 'firmware/**'
+      - 'tests/**'
       - '.github/workflows/build-firmware.yml'
   workflow_dispatch:
 
@@ -117,6 +118,10 @@ jobs:
               for name,data in contents.items():z.writestr(name,data)
           print('SD assets:',[(k,len(v)) for k,v in contents.items()])
           PY
+      - name: Native DTC transition tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -I firmware/t1n_obd tests/monitor_dtc_diff.cpp -o /tmp/t1n-dtc-test
+          /tmp/t1n-dtc-test
       - name: Compile ESP32 Dev Module with OTA partition
         run: |
           mkdir -p build dist
