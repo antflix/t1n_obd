@@ -5,6 +5,7 @@
 #include <SD.h>
 #include <time.h>
 #include "monitor_dtc_diff.h"
+#include "monitor_ignition_gate.h"
 extern uint32_t lastDtcScanMs; // defined in 90_setup.ino
 
 struct MonModule {
@@ -22,6 +23,24 @@ static uint32_t monEgsDue=0,monAbsDue=0,monHzrDue=0;
 static ModuleId monTarget=MOD_ENGINE;
 static uint32_t monDtcEvents=0,monLastClockLogMs=0;
 static String monLastError="";
+static KlineIgnitionGate monIgnition;
+static uint32_t monIgnitionSampleMs=0;
+static uint32_t monFailureWindowMs=0;
+static uint8_t monEngineFailuresInWindow=0;
+// ABS RXD failed to follow a commanded LOW during the vehicle test.
+// Keep the ABS scheduler disabled until physical channel repair is verified.
+static const bool monAbsChannelQualified=false;
+void monitorFailureBudget(){
+  uint32_t now=millis();
+  if(!monFailureWindowMs||now-monFailureWindowMs>1200000UL){
+    monFailureWindowMs=now;monEngineFailuresInWindow=0;
+  }
+  if(++monEngineFailuresInWindow>=3){
+    monitorLog("SAFETY_STOP",MOD_ENGINE,"3 engine connection failures inside 20 minutes");
+    monLastError="Auto monitor disabled: 3 engine failures in 20 min";
+    monitorSetEnabled(false);
+  }
+}
 
 bool monitorManualHold(){
   return monHoldUntil && (int32_t)(monHoldUntil-millis())>0;
@@ -147,6 +166,7 @@ void monitorStart(ModuleId mod){
   if(!ok){
     monModules[(uint8_t)mod].failures++;
     monLastError=lastError;
+    if(mod==MOD_ENGINE)monitorFailureBudget();
     monitorLog("CONNECT_FAILED",mod,lastError);
     // A failed secondary visit must not leave the engine offline for 30 s.
     monTarget=MOD_ENGINE;
@@ -171,8 +191,29 @@ void monitorTick(){
     monitorLog("CLOCK",monTarget,
       String("epoch=")+historyNow()+";source="+historyClockJson());
   }
-  if(!monEnabled||monitorManualHold()||busy||jobConnect||hzrFanOverrideActive)return;
+  // Passive RXD levels only; never change GPIO direction or drive vehicle bus.
+  // Don't sample while a diagnostic request is transmitting.
   uint32_t now=millis();
+  if(!busy&&!jobConnect&&now-monIgnitionSampleMs>=100UL){
+    monIgnitionSampleMs=now;
+    uint8_t previous=monIgnition.state;
+    uint8_t present=monIgnition.sample(digitalRead(K_RX[0])==HIGH,
+                                      digitalRead(K_RX[2])==HIGH,now);
+    if(present!=previous){
+      monitorLog(present==IGN_LOW?"KEY_SIGNAL_LOW":"KEY_SIGNAL_HIGH",
+                 monTarget,"Passive CR2 and EGS RXD levels");
+    }
+    if(present==IGN_LOW&&diagnosticSession&&monOwnSession){
+      // Key-off: no diagnostic disconnect message to an unpowered ECU.
+      livePolling=false;diagnosticSession=false;cr2Connected=false;
+      releaseKL();allRelaysOff();monOwnSession=false;monTarget=MOD_ENGINE;
+      autoReconnect=false;reconnectAtMs=0;
+      monRetryMs=now+15000UL;
+    }
+  }
+  // UNKNOWN or consistently LOW: no new ECU initialization.
+  if(!monEnabled||monIgnition.state!=IGN_HIGH||
+     monitorManualHold()||busy||jobConnect||hzrFanOverrideActive)return;
   if(!monOwnSession&&diagnosticSession){
     // Existing manually initiated session: don't seize it until disconnect.
     return;
@@ -183,6 +224,7 @@ void monitorTick(){
     if(monOwnSession){
       monModules[(uint8_t)monTarget].failures++;
       monitorLog("SESSION_LOST",monTarget,lastError);
+      if(monTarget==MOD_ENGINE)monitorFailureBudget();
       monOwnSession=false;
       monTarget=MOD_ENGINE;
       monRetryMs=now+10000UL;
@@ -208,7 +250,7 @@ void monitorTick(){
   bool stationary=engSpeed.valid && !stale(engSpeed,5000)
     && engSpeed.value>=0 && engSpeed.value<1.0
     && engRpm.valid && !stale(engRpm,5000) && engRpm.value>450;
-  if(stationary && (int32_t)(now-monAbsDue)>=0){
+  if(monAbsChannelQualified && stationary && (int32_t)(now-monAbsDue)>=0){
     monAbsDue=now+600000UL;monitorStart(MOD_ABS);return;
   }
   if((int32_t)(now-monHzrDue)>=0){
@@ -218,6 +260,12 @@ void monitorTick(){
 String monitorStatusJson(){
   String s="{\"enabled\":"+String(monEnabled?"true":"false")
     +",\"manualHold\":"+String(monitorManualHold()?"true":"false")
+    +",\"ignitionSignal\":\""+String(monIgnition.state==IGN_HIGH?"HIGH":
+                    monIgnition.state==IGN_LOW?"LOW":"UNKNOWN")+"\""
+    +",\"ignitionLowObserved\":"+String(monIgnition.sawLow?"true":"false")
+    +",\"ignitionQualified\":false"
+    +",\"absAutoQualified\":"+String(monAbsChannelQualified?"true":"false")
+    +",\"engineFailuresInWindow\":"+String(monEngineFailuresInWindow)
     +",\"active\":"+String(monOwnSession?"true":"false")
     +",\"target\":"+String((int)monTarget)
     +",\"clock\":"+historyClockJson()
