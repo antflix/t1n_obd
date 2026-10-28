@@ -307,18 +307,42 @@ void egsLivePollTick(){
 void livePollTick(){if(activeModule==MOD_ENGINE)engineLivePollTick();else if(activeModule==MOD_ABS)absLivePollTick();else if(activeModule==MOD_EGS)egsLivePollTick();else if(activeModule==MOD_HZR||activeModule==MOD_KI||activeModule==MOD_EWM)sharedLivePollTick();}
 String engineExpected(const char*id){
   String k=id;
-  if(k=="rpm")return engIdleTarget.valid?"Idle target "+engIdleTarget.text+" rpm":"Warm idle ~680 rpm";
-  if(k=="coolant")return "Warm ~80-100 C; sustained >105 C investigate";
-  if(k=="battery")return engRpm.valid&&engRpm.value>400?"Running ~13.2-14.7 V":"Engine off ~12.4-12.8 V";
-  if(k=="sensor5v1"||k=="sensor5v2")return "~4.9-5.1 V";
-  if(k=="oilLevel")return "Engine off, sensor window ~40-120 mm";
-  if(k=="lowFuel")return engLowFuelMin.valid?"Minimum "+engLowFuelMin.text+" bar":"Idle ~2.0-2.5 bar";
-  if(k=="boost")return engBoostTarget.valid?"Target "+engBoostTarget.text+" hPa":"KOEO ~atmospheric";
-  if(k=="rail")return engRailTarget.valid?"Target "+engRailTarget.text+" bar":"Cranking must build rail pressure";
-  if(k=="pedal1"||k=="pedal2")return "Both pedal channels should track";
-  if(k.startsWith("cylCorr"))return "Near zero and similar between cylinders";
-  if(k.startsWith("cylRpm"))return "Near overall RPM";
-  return "";
+  if(k=="rpm"){if(engIdleTarget.valid&&engSpeed.valid&&engSpeed.value<1.0)return"Idle target "+engIdleTarget.text+" rpm · warm idle usually ~680 rpm";return"Warm idle ~680 rpm · operating RPM varies";}
+  if(k=="speed")return"Driving-dependent";
+  if(k=="load")return"0–100% · operating-dependent";
+  if(k=="coolant")return"Warm roughly 80–100 °C · investigate sustained >105 °C";
+  if(k=="intake")return"Cold-soak ≈ ambient · rises with engine-bay heat/boost";
+  if(k=="fuelTemp")return"Cold-soak ≈ ambient · rises while running";
+  if(k=="oilTemp")return"Warm roughly 80–110 °C";
+  if(k=="egtPre"||k=="egtPost")return"Load-dependent · use as a trend/comparison value";
+  if(k=="maf")return"Load/EGR-dependent · sensor span roughly 15–480 kg/h";
+  if(k=="pedal1"){if(engPedal2.valid)return"0–100% · pedal 2 = "+engPedal2.text+"%";return"0–100% · both pedal channels should track";}
+  if(k=="pedal2"){if(engPedal1.valid)return"0–100% · pedal 1 = "+engPedal1.text+"%";return"0–100% · both pedal channels should track";}
+  if(k=="atmos")return"Altitude/weather-dependent · compare with local barometric pressure";
+  if(k=="battery")return engRpm.valid&&engRpm.value>400?"Running roughly 13.2–14.7 V":"Engine off: ~12.6 V full; ≥12.4 V generally healthy";
+  if(k=="sensor5v1"||k=="sensor5v2")return"5 V reference · expected about 4.9–5.1 V";
+  if(k=="oilQuality")return"Raw CBF presentation unresolved · display for correlation only";
+  if(k=="oilLevel")return"Engine-off measurement only · sensor measuring window roughly 40–120 mm";
+  if(k=="lowFuel"){if(engLowFuelMin.valid)return"ECU minimum "+engLowFuelMin.text+" bar · actual should stay ≥ minimum";return"Idle typically ~2.0–2.5 bar · ECU minimum shown separately";}
+  if(k=="lowFuelRaw")return"Pressure-sensor signal roughly 0.5–3.5 V";
+  if(k=="lowFuelDiag"){if(engLowFuel.valid)return"Cross-check actual "+engLowFuel.text+" bar";return"Diagnostic-converted duplicate of low-side pressure";}
+  if(k=="lowFuelMin")return"ECU-calculated minimum · actual low-side pressure should stay above this";
+  if(k=="boost"){if(engBoostTarget.valid){double d=engBoost.value-engBoostTarget.value;return"Target "+engBoostTarget.text+" hPa · Δ "+String(d,0)+" hPa";}return"KOEO ≈ atmospheric · under load compare with boost target";}
+  if(k=="boostTarget")return"ECU target · compare with actual boost";
+  if(k=="rail"){if(engRailTarget.valid){double d=engRail.value-engRailTarget.value;return"Target "+engRailTarget.text+" bar · Δ "+String(d,1)+" bar";}return"Must reach ~200 bar to start · under load compare with target";}
+  if(k=="railTarget")return"ECU target · compare with actual rail pressure";
+  if(k=="egr"||k=="boostDuty")return"0–100% command · operating-condition dependent";
+  if(k=="drvCurrent")return"ECU-controlled · use as a trend/diagnostic value";
+  if(k=="fuelQty")return"Load/RPM-dependent · mm³ per stroke";
+  if(k.startsWith("cylCorr"))return"Should cluster near 0 and near the other cylinders";
+  if(k.startsWith("cylRpm"))return engRpm.valid?"Should stay close to overall "+engRpm.text+" rpm and other cylinders":"Should stay close to overall RPM and other cylinders";
+  if(k=="idleTarget")return"Warm idle target is usually around 680 rpm";
+  if(k=="diagIdleTarget")return"Compare with ECU idle target/actual RPM when active";
+  if(k=="speedTarget")return"ECU target · operating-dependent";
+  if(k=="airMassTarget")return"ECU air-mass target after limiting";
+  if(k=="egrAirMassTarget")return"ECU EGR-control air-mass target";
+  if(k.startsWith("fuelReq"))return"ECU-requested fuel quantity · operating/control-state dependent";
+  return"";
 }
 String engineHealth(const char*id,const ValueState&v){
   if(!v.valid||stale(v))return"stale";
