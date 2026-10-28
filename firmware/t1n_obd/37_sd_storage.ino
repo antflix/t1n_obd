@@ -1,10 +1,10 @@
 // Optional 3.3V SPI microSD storage for the T1N scanner.
-// CS=GPIO22, CLK=GPIO18, MISO=GPIO19, MOSI=GPIO25, common ground.
+// CS=GPIO22, CLK=GPIO18, MISO=GPIO19, MOSI=GPIO17, common ground.
 // No flash history or NVS is modified by installing this support.
 #include <SPI.h>
 #include <SD.h>
 
-static const uint8_t SD_CS_PIN=22, SD_CLK_PIN=18, SD_MISO_PIN=19, SD_MOSI_PIN=25;
+static const uint8_t SD_CS_PIN=22, SD_CLK_PIN=18, SD_MISO_PIN=19, SD_MOSI_PIN=17;
 static bool sdReady=false;
 static String sdLastError="SD not checked";
 static File sdUploadFile;
