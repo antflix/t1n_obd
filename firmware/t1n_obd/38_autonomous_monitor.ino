@@ -4,6 +4,7 @@
 #include <Preferences.h>
 #include <SD.h>
 #include <time.h>
+extern uint32_t lastDtcScanMs; // defined in 90_setup.ino
 
 struct MonModule {
   uint32_t connects=0,failures=0,recentWrites=0,lastConnectionMs=0;
