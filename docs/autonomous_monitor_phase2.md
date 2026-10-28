@@ -10,7 +10,7 @@
 |---|---|---|---|
 | CR2 engine | 7 | 13/23 | Main session, priority 120+ seconds |
 | EGS transmission | 11 | 26/21 | 12-second window, every ~4 minutes |
-| ABS | 9 | 33/32 | 8-second window, every ~10 minutes |
+| ABS | 9 | 33/32 | 8-second window, every ~10 minutes, **stationary only** with fresh speed/RPM |
 | HZR HVAC | 15 | 14/27 | 8-second window, every ~15 minutes |
 
 **Only one K-line session can be active:** all transceivers share UART2. The engine is temporarily disconnected during auxiliary module visits. These are scheduling targets; actual poll performance must be measured in the van. Unsuccessful ECU connections back off instead of generating DTC alerts.
