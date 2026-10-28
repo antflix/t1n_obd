@@ -86,6 +86,11 @@ web.on("/api/monitor/clock",HTTP_GET,[]{
   web.sendHeader("Cache-Control","no-store");
   web.send(200,"application/json",historyClockJson());
 });
+web.on("/api/monitor/selftest",HTTP_POST,[]{
+  String result;
+  bool ok=monitorStorageSelfTest(result);
+  web.send(ok?200:409,"text/plain",result);
+});
 web.on("/api/monitor/enable",HTTP_POST,[]{
   String enabled=web.arg("enabled");
   if(enabled!="0"&&enabled!="1"){web.send(400,"text/plain","Set enabled=0 or 1");return;}
