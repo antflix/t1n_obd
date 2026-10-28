@@ -16,7 +16,7 @@ struct MonModule {
   uint8_t statuses[32]={};
 };
 static MonModule monModules[6];
-static bool monEnabled=true,monOwnSession=false;
+static bool monEnabled=false,monOwnSession=false;
 static uint32_t monStartMs=0,monRetryMs=0,monHoldUntil=0;
 static uint32_t monEgsDue=0,monAbsDue=0,monHzrDue=0;
 static ModuleId monTarget=MOD_ENGINE;
@@ -75,18 +75,24 @@ void monitorSaveDtcSnapshot(uint8_t mod){
   p.putString(mod==0?"cr2":"egs",monitorEncodeDtc(monModules[mod]));
   p.putBool(mod==0?"cr2valid":"egsvalid",true);p.end();
 }
-void monitorDtcEvent(uint8_t mod,uint16_t code,uint8_t status,const char *change){
-  monDtcEvents++;
-  if(sdCardReady()){
-    File f=SD.open("/t1nlogs/dtc_events.csv","a");
-    if(f){
-      const uint32_t epoch=historyNow();
-      f.print(epoch);f.print(',');f.print(millis());f.print(',');
-      f.print(mod);f.print(',');f.print(change);f.print(',');
-      char raw[7];snprintf(raw,sizeof(raw),"%04X%02X",code,status);
-      f.println(raw);f.flush();f.close();
-    }else monLastError="DTC event SD write failed";
+bool monitorDtcEvent(uint8_t mod,uint16_t code,uint8_t status,const char *change){
+  if(!sdCardReady()){
+    monLastError="Cannot persist DTC changes: SD unavailable";
+    return false;
   }
+  File f=SD.open("/t1nlogs/dtc_events.csv","a");
+  if(!f){monLastError="DTC event SD open failed";return false;}
+  size_t before=f.size();
+  const uint32_t epoch=historyNow();
+  f.print(epoch);f.print(',');f.print(millis());f.print(',');
+  f.print(mod);f.print(',');f.print(change);f.print(',');
+  char raw[7];snprintf(raw,sizeof(raw),"%04X%02X",code,status);
+  f.println(raw);f.flush();
+  bool okay=f.size()>before;
+  f.close();
+  if(okay){monDtcEvents++;return true;}
+  monLastError="DTC event SD write failed";
+  return false;
 }
 void monitorDtcSnapshot(uint8_t mod,const uint16_t *codes,const uint8_t *statuses,uint8_t count){
   if((mod!=0&&mod!=2)||count>32)return;
@@ -98,12 +104,17 @@ void monitorDtcSnapshot(uint8_t mod,const uint16_t *codes,const uint8_t *statuse
   size_t n=monitorDiffDtc(previous,m.dtcCount,m.dtcBaseline,
                           current,count,events,64);
   bool changed=!m.dtcBaseline || count!=m.dtcCount || n!=0;
+  bool allEventsSaved=true;
   for(size_t i=0;i<n;i++){
     const char *kind=events[i].kind==MON_DTC_NEW?"NEW":
                      events[i].kind==MON_DTC_STATUS_CHANGED?"STATUS_CHANGED":
                      events[i].kind==MON_DTC_NOT_REPORTED?"NOT_REPORTED":"BASELINE";
-    monitorDtcEvent(mod,events[i].code,events[i].status,kind);
+    if(!monitorDtcEvent(mod,events[i].code,events[i].status,kind))
+      allEventsSaved=false;
   }
+  // Keep previous successful baseline if an event could not be persisted;
+  // the next ECU scan can retry rather than silently losing a new fault.
+  if(!allEventsSaved)return;
   m.dtcCount=count;
   for(uint8_t i=0;i<count;i++){m.codes[i]=codes[i];m.statuses[i]=statuses[i];}
   m.dtcBaseline=true;
@@ -113,7 +124,7 @@ void monitorDtcSnapshot(uint8_t mod,const uint16_t *codes,const uint8_t *statuse
 }
 void monitorBegin(){
   Preferences p;
-  if(p.begin("t1nmonitor",true)){monEnabled=p.getBool("enabled",true);p.end();}
+  if(p.begin("t1nmonitor",true)){monEnabled=p.getBool("enabled",false);p.end();}
   monitorLoadDtcSnapshots();
   uint32_t now=millis();
   monRetryMs=now+12000UL;monEgsDue=now+240000UL;
