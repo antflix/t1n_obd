@@ -156,7 +156,7 @@ web.on("/advanced",HTTP_GET,[]{if(sdServePage("/www/advanced.html"))return;web.s
 });
 web.on("/update",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store, no-cache, must-revalidate");web.sendHeader("Pragma","no-cache");web.send(200,"text/html; charset=utf-8",updatePage());});
 web.on("/api/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",moduleStatusJson());});
-web.on("/api/sensors",HTTP_GET,[]{web.send(200,"application/json",sensorsJson());});
+web.on("/api/sensors",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");sensorsJson(false,true);});
 web.on("/api/history/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",historyStatusJson());});
 web.on("/api/history/data",HTTP_GET,[]{
   int module=web.arg("module").toInt();
