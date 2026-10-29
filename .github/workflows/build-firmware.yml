@@ -109,6 +109,7 @@ jobs:
               m=re.search(r'String '+func+r'\(\)\{return R"HTML\((.*?)\)HTML";\}',src,re.S)
               if not m:raise SystemExit('Cannot extract SD page from '+p)
               contents[name]=m.group(1).encode('utf-8')
+          contents['www/pi.html']=pathlib.Path('firmware/sdcard/pi.html').read_bytes()
           version=re.search(r'FIRMWARE_VERSION\s*=\s*"([^"]+)"',
                             pathlib.Path('firmware/t1n_obd/t1n_obd.ino').read_text()).group(1)
           manifest={'version':version,'pinout':{'cs':22,'clk':18,'miso':19,'mosi':17},
