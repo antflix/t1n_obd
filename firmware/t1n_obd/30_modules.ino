@@ -360,9 +360,29 @@ String valueJson(const char*id,const char*label,const ValueState&v){
   return"{\"id\":\""+String(id)+"\",\"label\":\""+String(label)+"\",\"value\":\""+jsonEscape(v.text)+"\",\"unit\":\""+jsonEscape(v.unit)+"\",\"valid\":"+String(v.valid?1:0)+",\"sampleMs\":"+String(v.updatedMs)+",\"ageMs\":"+String(v.valid?(uint32_t)(millis()-v.updatedMs):0)+",\"stale\":"+String(stale(v)?1:0)+",\"state\":\""+state+"\",\"expected\":\""+jsonEscape(expected)+"\"}";
 }
 void historyObserve(const char *id,const ValueState &v);
-String sensorsJson(bool captureOnly=false){
-  String s=captureOnly?String(""):("{\"module\":\""+jsonEscape(moduleName(activeModule))+"\",\"items\":[");bool first=true;
-  auto add=[&](const char*id,const char*label,const ValueState&v){if(captureOnly){historyObserve(id,v);return;}if(!first)s+=",";first=false;s+=valueJson(id,label,v);};
+String sensorsJson(bool captureOnly=false,bool stream=false){
+  // Full 100+ metric responses previously exhausted fragmented String heap:
+  // ESP32 emitted empty fragments and malformed JSON after ~8 KiB.
+  // Stream a bounded 2 KiB buffer instead of retaining the full payload.
+  String s=captureOnly?String(""):("{\"module\":\""+jsonEscape(moduleName(activeModule))+"\",\"items\":[");
+  bool first=true;
+  if(stream&&!captureOnly){
+    web.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    web.send(200,"application/json","");
+    s.reserve(2500);
+  }
+  auto add=[&](const char*id,const char*label,const ValueState&v){
+    if(captureOnly){historyObserve(id,v);return;}
+    String part=valueJson(id,label,v);
+    if(!part.length())return; // never emit a dangling separator
+    if(!first)s+=",";
+    first=false;
+    if(stream&&s.length()+part.length()>2048){
+      web.sendContent(s);
+      s="";
+    }
+    s+=part;
+  };
   if(activeModule==MOD_ENGINE){
     add("rpm","Engine RPM",engRpm);add("speed","Vehicle speed",engSpeed);add("coolant","Coolant temperature",engCoolant);add("oilTemp","Engine oil temperature",engOilTemp);add("battery","Battery voltage",engBattery);add("lowFuel","Low-side fuel pressure",engLowFuel);
     add("boost","Boost / MAP actual",engBoost);add("boostTarget","Boost target",engBoostTarget);add("rail","Rail pressure actual",engRail);add("railTarget","Rail pressure target",engRailTarget);
@@ -417,6 +437,12 @@ String sensorsJson(bool captureOnly=false){
       }
     }
   }
-  if(!captureOnly)s+="]}";return s;
+  if(!captureOnly)s+="]}";
+  if(stream&&!captureOnly){
+    web.sendContent(s);
+    web.sendContent("");
+    return "";
+  }
+  return s;
 }
 String moduleStatusJson(){String s="{";s+="\"firmware\":\""+String(FIRMWARE_VERSION)+"\",";s+="\"module\":\""+jsonEscape(moduleName(activeModule))+"\",";s+="\"moduleId\":"+String((int)activeModule)+",";s+="\"address\":\"0x"+hex2(activeEcuAddr)+"\",";s+="\"obdPin\":"+String(moduleObdPin(activeModule))+",";int ri=relayIndexForModule(activeModule);s+="\"relay\":"+String(ri>=0?ri+1:0)+",";s+="\"relayGpio\":"+String(ri>=0?RX_PIN:255)+",";s+="\"connected\":"+String(diagnosticSession?1:0)+",";s+="\"polling\":"+String(livePolling?1:0)+",";s+="\"busy\":"+String(busy?1:0)+",";s+="\"status\":\""+jsonEscape(scannerStatus)+"\",";s+="\"error\":\""+jsonEscape(lastError)+"\",";s+="\"variant\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantId:activeModule==MOD_ABS?(absKm20?"ABSR_5_7_KM20":"Unknown"):"")+"\",";s+="\"variantRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantRaw:activeModule==MOD_ABS?absPartId:"")+"\",";s+="\"identRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsIdentRaw:"")+"\",";s+="\"wifi\":\""+jsonEscape(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():WiFi.softAPIP().toString())+"\"";s+="}";return s;}
