@@ -42,7 +42,6 @@ void monitorDtcSnapshot(uint8_t mod,const uint16_t* codes,const uint8_t* statuse
 void monitorPersistedSample(uint8_t mod);
 void monitorBegin();
 void monitorTick();
-void monitorManualOverride();
 void monitorSetEnabled(bool on);
 bool monitorStorageSelfTest(String &report);
 bool monitorDtcSelfTest(String &report);
@@ -55,7 +54,7 @@ int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.10.22-consecutive-retry-test";
+static const char* FIRMWARE_VERSION = "1.10.23-auto-owned-test";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
