@@ -16,7 +16,7 @@ static size_t sdUploadBytes=0;
 static bool sdUploadComplete=false;
 
 bool sdAllowedName(const String &name) {
-  return name=="index.html"||name=="advanced.html"||name=="manifest.json";
+  return name=="index.html"||name=="advanced.html"||name=="manifest.json"||name=="pi.html";
 }
 void sdInitialize() {
   // K-line pins are deliberately excluded from the custom SPI routing.
@@ -39,9 +39,9 @@ String sdStatusJson() {
       +",\"capacityMiB\":"+String((unsigned long)(SD.totalBytes()/1048576ULL))
       +",\"usedMiB\":"+String((unsigned long)(SD.usedBytes()/1048576ULL));
   }
-  const char* names[]={"index.html","advanced.html","manifest.json"};
+  const char* names[]={"index.html","advanced.html","manifest.json","pi.html"};
   out+=",\"files\":[";
-  for(int i=0;i<3;i++){
+  for(int i=0;i<4;i++){
     if(i)out+=",";
     String name=names[i],path="/www/"+name;
     File file=sdReady?SD.open(path,FILE_READ):File();
