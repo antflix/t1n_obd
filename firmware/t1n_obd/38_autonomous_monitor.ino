@@ -21,7 +21,7 @@ struct MonModule {
 };
 static MonModule monModules[6];
 static bool monEnabled=false,monOwnSession=false;
-static uint32_t monStartMs=0,monRetryMs=0,monHoldUntil=0;
+static uint32_t monStartMs=0,monRetryMs=0;
 static uint32_t monEgsDue=0,monAbsDue=0,monHzrDue=0;
 static ModuleId monTarget=MOD_ENGINE;
 static uint32_t monDtcEvents=0,monLastClockLogMs=0;
@@ -45,14 +45,6 @@ uint32_t monitorEngineFailureBackoff(){
   return delayMs;
 }
 
-bool monitorManualHold(){
-  return monHoldUntil && (int32_t)(monHoldUntil-millis())>0;
-}
-void monitorManualOverride(){
-  // User-directed diagnostic sessions win over the background scheduler.
-  monHoldUntil=millis()+300000UL;
-  monOwnSession=false;
-}
 void monitorPersistedSample(uint8_t mod){
   if(mod<6)monModules[mod].recentWrites++;
   if(mod==MOD_ENGINE){
@@ -160,9 +152,20 @@ void monitorBegin(){
   monAbsDue=now+600000UL;monHzrDue=now+900000UL;
 }
 void monitorSetEnabled(bool enable){
+  // One owner for the shared diagnostic UART. Manual sessions are released
+  // immediately when automatic monitoring is enabled; there is no hold timer.
+  if(busy||jobConnect)return;
+  if(enable){
+    if(diagnosticSession&&!monOwnSession)disconnectCurrentModule();
+    monRetryMs=millis()+1000UL;
+    monTarget=MOD_ENGINE;
+    autoReconnect=false;reconnectAtMs=0;
+  }else{
+    if(diagnosticSession&&monOwnSession)disconnectCurrentModule();
+    monOwnSession=false;
+    monTarget=MOD_ENGINE;
+  }
   monEnabled=enable;
-  if(!enable){monOwnSession=false;monTarget=MOD_ENGINE;}
-  else {monRetryMs=millis()+1000UL;monTarget=MOD_ENGINE;}
   Preferences p;if(p.begin("t1nmonitor",false)){p.putBool("enabled",enable);p.end();}
 }
 void monitorStart(ModuleId mod){
@@ -223,7 +226,7 @@ void monitorTick(){
   }
   // UNKNOWN or consistently LOW: no new ECU initialization.
   if(!monEnabled||monIgnition.state!=IGN_HIGH||
-     monitorManualHold()||busy||jobConnect||hzrFanOverrideActive)return;
+     busy||jobConnect||hzrFanOverrideActive)return;
   if(!monOwnSession&&diagnosticSession){
     // Existing manually initiated session: don't seize it until disconnect.
     return;
@@ -270,7 +273,6 @@ void monitorTick(){
 }
 String monitorStatusJson(){
   String s="{\"enabled\":"+String(monEnabled?"true":"false")
-    +",\"manualHold\":"+String(monitorManualHold()?"true":"false")
     +",\"ignitionSignal\":\""+String(monIgnition.state==IGN_HIGH?"HIGH":
                     monIgnition.state==IGN_LOW?"LOW":"UNKNOWN")+"\""
     +",\"ignitionLowObserved\":"+String(monIgnition.sawLow?"true":"false")
