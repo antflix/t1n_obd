@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#060b13"><title>Sprinter Monitor</title>
+<style>:root{color-scheme:dark;--bg:#050a11;--panel:#101b2b;--panel2:#0b1522;--line:#273a50;--txt:#f1f7ff;--muted:#8ea8c2;--cyan:#39b8ff;--green:#53de99;--orange:#ffbd5b;--red:#ff6474;--shade:#07121f}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:var(--bg);overflow:hidden;font:14px system-ui,-apple-system,'DejaVu Sans',sans-serif;color:var(--txt);-webkit-font-smoothing:antialiased;touch-action:manipulation}button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}.dashboard{width:100vw;height:100dvh;min-height:360px;max-width:100vw;display:grid;grid-template-rows:51px minmax(0,1fr) 54px;overflow:hidden;padding:6px 8px 6px;gap:7px;background:radial-gradient(ellipse 70% 50% at 50% -10%,#163550aa,transparent),var(--bg)}
+.topbar{display:flex;align-items:center;padding:0 13px;gap:20px;border:1px solid var(--line);border-radius:11px;background:linear-gradient(110deg,#0d1928,#091320);min-width:0}
+.brand{display:flex;align-items:center;gap:9px;width:244px;flex-shrink:0}.brand .mark{border:2px solid #c3d4e7;border-radius:50%;width:35px;height:35px;display:grid;place-items:center;font-size:18px;font-weight:900;font-style:italic;letter-spacing:-2px;color:#fff}.brand strong{display:block;font-size:17px;letter-spacing:.06em;line-height:1.04}.brand span{display:block;color:var(--muted);font-size:9px;font-weight:750;letter-spacing:.18em;margin-top:3px}.brand span b{font-weight:400;color:#44637e}
+.connection{display:flex;align-items:center;gap:9px;flex:1;min-width:0}.led{width:11px;height:11px;border-radius:50%;background:#70839a;box-shadow:0 0 0 4px #8ca3ba15;flex-shrink:0}.led.ok{background:var(--green);box-shadow:0 0 10px #3ae18e6e}.led.warn{background:var(--orange);box-shadow:0 0 10px #efab506a}.led.bad{background:var(--red)}.connection strong{display:block;font-size:12px;line-height:1.1;letter-spacing:.05em}.connection small{display:block;color:var(--muted);font-size:9px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:222px}.header-right{display:flex;align-items:center;gap:18px;margin-left:auto;flex-shrink:0}.sd-area{display:flex;gap:7px;align-items:center}.sd-icon{border:1px solid #5c7491;color:#c4d9ea;border-radius:3px;font-size:10px;padding:4px 3px;font-weight:800}.sd-area b{font-size:11px;display:block;letter-spacing:.04em}.sd-area small{font-size:9px;display:block;color:var(--muted)}.clock{font-size:17px;font-weight:750;letter-spacing:.02em;border-left:1px solid var(--line);padding-left:15px;white-space:nowrap}
+.workspace{min-height:0;position:relative}.page{display:none;height:100%;overflow:hidden}.page.active{display:flex;flex-direction:column;gap:8px}
+.gauge-grid{min-height:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;flex:1 1 62%;align-content:stretch}.gauge-card{border:1px solid var(--line);border-radius:13px;background:linear-gradient(155deg,#122438,#0a1420 78%);padding:9px 9px 7px;display:flex;align-items:center;flex-direction:column;min-height:0;min-width:0;position:relative;overflow:hidden}.gauge-card::before{content:"";position:absolute;top:0;left:35px;right:35px;height:1px;background:#4380ab72}.gauge-card.warn{border-color:#85602c}.gauge-card.bad{border-color:#9a3f51}.gauge-card.missing{opacity:.77}.card-label{font-size:12px;font-weight:800;letter-spacing:.095em;color:#c3d9ed;text-align:center;white-space:nowrap}.gauge{width:100%;flex:1;display:grid;place-items:center;min-height:0}.gauge-svg{width:100%;height:100%;max-height:157px;overflow:visible}.gauge-number{font-size:31px;font-weight:870;fill:var(--txt);text-anchor:middle;font-variant-numeric:tabular-nums;letter-spacing:-.06em}.gauge-unit{font-size:12px;fill:#a9c5df;text-anchor:middle;font-weight:650}.gauge-endpoint{font-size:9px;fill:#6f8ba6;font-weight:600}.expected{border-top:1px solid #203850;width:100%;height:32px;flex:0 0 32px;display:flex;justify-content:center;align-items:center;text-align:center;font-size:10px;line-height:1.2;font-weight:650;color:#aac8df;padding:2px 1px;overflow:hidden}.gauge-card.bad .expected{color:#ff9aa3}.gauge-card.warn .expected{color:#ffd497}
+.lower-grid{display:grid;grid-template-columns:minmax(0,1.23fr) minmax(0,.95fr);gap:8px;height:127px;flex-shrink:0}.mini-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;min-width:0}.mini{background:linear-gradient(160deg,#102033,#0a1420);border:1px solid var(--line);border-radius:12px;padding:10px 5px 8px;text-align:center;min-width:0;overflow:hidden}.mini.warn{border-color:#ad773a}.mini.bad{border-color:#b34b57}.mini.missing{opacity:.66}.mini-title{font-size:10px;letter-spacing:.06em;font-weight:800;color:#9dbbd3;white-space:nowrap}.mini-value{font-weight:850;font-size:31px;line-height:1.1;margin-top:7px;letter-spacing:-.035em;font-variant-numeric:tabular-nums}.mini-unit{font-size:11px;color:#b5cce2;margin-top:1px}.mini-expected{font-size:9px;color:#8aaac4;margin-top:7px;line-height:1.1;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.2;max-height:24px}
+.alert-card{border:1px solid var(--line);border-radius:12px;background:linear-gradient(155deg,#122338,#0a1420);padding:9px 11px 8px;overflow:hidden;display:flex;flex-direction:column}.alert-title{display:flex;align-items:center;justify-content:space-between;color:#e8f3ff;font-size:12px;letter-spacing:.055em;flex:0 0 17px}.count{font-size:10px;border-radius:20px;padding:3px 7px;background:#1e3349;color:#a5c3df}.count.warning{background:#452d19;color:#ffcc8a}.count.critical{background:#4e202a;color:#ffa2a8}.alert-preview{display:flex;flex-direction:column;gap:5px;padding-top:7px;overflow:hidden}.all-clear{color:var(--green);font-size:14px;font-weight:750;display:flex;align-items:center;gap:7px;padding-top:18px}.all-clear::before{content:'✓';width:23px;height:23px;border-radius:50%;display:grid;place-items:center;background:#1b5039;font-size:14px}.issue-row{border-radius:7px;display:flex;gap:8px;align-items:center;padding:7px 8px;min-height:29px;font-size:11px;font-weight:600;line-height:1.17;background:#14283b;color:#d7e9f9;border:1px solid #2e536e}.issue-row.warn{background:#3b2b18;color:#ffe1b5;border-color:#956424}.issue-row.critical{background:#3d1c2a;color:#ffbec1;border-color:#b34a58}.issue-row.info{background:#122a40;color:#b5dafa}.issue-icon{width:20px;flex:0 0 20px;text-align:center;font-size:15px;font-weight:800}.issue-row .issue-message{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.issue-row .issue-tag{font-size:9px;text-transform:uppercase;opacity:.8}
+.bottom-nav{border:1px solid var(--line);background:linear-gradient(130deg,#101e30,#0b1422);border-radius:12px;display:grid;grid-template-columns:repeat(4,1fr);overflow:hidden;min-height:0}.nav-btn{color:#8badd0;background:transparent;border:none;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;position:relative;font-weight:750;font-size:11px;letter-spacing:.03em;min-width:0}.nav-btn:not(:first-child)::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:1px;background:#284059}.nav-btn.active{color:#43beff;background:linear-gradient(#163b5933,#1173ab17)}.nav-btn.active::after{content:"";position:absolute;bottom:0;left:20%;right:20%;height:2px;background:#4bc8ff;box-shadow:0 0 12px #4ac8ff}.nav-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.nav-btn:first-child svg{fill:currentColor;stroke:none}.section-head{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--line);padding:3px 5px 9px}.section-head h2{font-size:19px;letter-spacing:.01em;margin:0}.section-sub{font-size:11px;color:var(--muted)}.scroll-pane{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:2px 1px}.scroll-pane .issue-row{font-size:14px;padding:13px}.scroll-pane .issue-row .issue-message{white-space:normal}.scroll-pane .issue-row .issue-icon{font-size:18px}.empty{color:#9cc4db;text-align:center;margin:auto;font-size:15px}.footnote{font-size:10px;color:#829bb5;padding:4px 5px 1px}.trend-controls{display:flex;gap:7px;justify-content:flex-start}.trend-opt{border:1px solid #29445e;background:#12283d;color:#a8c5df;padding:7px 15px;border-radius:9px;font-size:11px;font-weight:700}.trend-opt.selected{color:#fff;border-color:#3a9bd2;background:#164567}.trend-surface{background:#0b1726;border:1px solid var(--line);border-radius:12px;padding:8px 12px;flex:1;min-height:0;display:flex;flex-direction:column}.trend-info{font-size:12px;color:#bed7ec;font-weight:650;min-height:24px}.trend-surface svg{width:100%;flex:1;min-height:0}.module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:1;min-height:0}.module-tile{border:1px solid var(--line);border-radius:11px;background:#0e1d2e;padding:11px;overflow:hidden}.module-header{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;font-weight:780}.module-sub{font-size:10px;color:var(--muted);margin-top:4px}.module-indicator{font-size:10px;background:#172e43;border-radius:15px;padding:4px 8px;color:#a1c9e3;white-space:nowrap}.module-indicator.connected{background:#1c4a36;color:#83e9b1}.module-stats{display:flex;gap:14px;margin-top:11px;color:#c6dbeb;font-size:11px}.module-stats strong{font-size:16px;display:block;color:white}.module-footer{font-size:11px;color:var(--muted);padding:0 5px}.demo-tag{position:fixed;z-index:9;bottom:70px;right:14px;padding:5px 8px;background:#5d3107;color:#fff4b8;font-size:11px;font-weight:900;border:1px solid #e0a033;border-radius:7px;pointer-events:none}
+@media(min-height:650px){.dashboard{max-width:1200px;margin:auto;grid-template-rows:61px minmax(0,1fr) 67px;padding:10px;gap:10px}.lower-grid{height:158px}.gauge-card{padding-top:14px}.gauge-svg{max-height:230px}.card-label{font-size:14px}.expected{font-size:12px;height:44px;flex-basis:44px}.mini-value{font-size:40px}.mini-title{font-size:13px}.mini-expected{font-size:11px}.alert-card{padding:12px}.nav-btn{font-size:13px}.nav-btn svg{width:23px;height:23px}}
+@media(max-width:700px){.brand{width:190px}.brand strong{font-size:15px}.clock{font-size:13px}.topbar{gap:9px}.header-right{gap:8px}.connection small{max-width:130px}.card-label{font-size:10px}.gauge-grid{gap:4px}.gauge-card{padding:7px 4px}.expected{font-size:8px}.lower-grid{grid-template-columns:1.15fr 1fr}.mini-title{font-size:9px}.mini-value{font-size:23px}.mini-expected{font-size:8px}}
+
+/* v2: 800×480 automobile display — four larger 2×2 gauges and concise sidebar */
+.dashboard{grid-template-rows:45px minmax(0,1fr) 49px;padding:5px 6px;gap:6px}
+.topbar{padding:0 10px;gap:12px;border-radius:9px}
+.brand{width:194px;gap:7px}.brand .mark{height:30px;width:30px;font-size:15px}
+.brand strong{font-size:17px}.brand span{font-size:9px}
+.connection strong{font-size:12px}.connection small{font-size:10px;max-width:153px}
+.header-right{gap:10px}.clock{font-size:14px;padding-left:8px}
+.page.active{gap:0}.main-layout{display:grid;grid-template-columns:minmax(0,2.13fr) minmax(0,1fr);min-height:0;min-width:0;flex:1;gap:6px}
+.gauge-grid{min-height:0;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:6px;flex:none}
+.gauge-card{border-radius:12px;padding:5px 7px;min-height:0}
+.card-label{font-size:14px;line-height:18px;letter-spacing:.05em;color:#d4eaff}
+.gauge{width:100%;flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.gauge-svg{width:100%;height:100%;max-height:none;max-width:228px;overflow:visible}
+.gauge-number{font-size:39px;letter-spacing:-.045em;dominant-baseline:auto}
+.gauge-unit{font-size:13px}.gauge-endpoint{font-size:11px}
+.gauge-target{font-size:11px;font-weight:850;fill:#9af7c6;text-anchor:middle;letter-spacing:.025em}
+.gauge-target.secondary{fill:#9db3c9}.gauge-target.warn{fill:#ffc477}.gauge-target.bad{fill:#ff8b97}
+.gauge-card.warn{border-color:#987139}.gauge-card.bad{border-color:#bc5963}
+.side-panel{min-height:0;min-width:0;display:flex;flex-direction:column;gap:6px}
+.mini-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:5px;height:168px;flex:0 0 168px}
+.mini{padding:5px 3px;border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
+.mini-title{font-size:11px;letter-spacing:.01em;line-height:15px}
+.mini-value{font-size:27px;line-height:1;margin-top:4px}
+.mini-unit{font-size:10px;margin:0}
+.mini-expected{font-size:10px;margin-top:3px;line-height:1.2;max-height:none;color:#b9d1e5}
+.alert-card{min-height:0;flex:1;padding:7px;border-radius:9px}
+.alert-title{font-size:12px}.alert-preview{padding-top:7px}
+.all-clear{font-size:12px;padding-top:11px;line-height:1.3}
+.issue-row{padding:7px 5px;font-size:10px}.issue-row .issue-tag{display:none}
+.nav-btn{font-size:12px;gap:2px}.nav-btn svg{width:21px;height:21px}
+.demo-tag{bottom:54px}
+@media(min-height:650px){.dashboard{grid-template-rows:59px minmax(0,1fr) 64px;padding:10px;gap:10px}
+ .gauge-card{padding:12px}.card-label{font-size:16px}.gauge-svg{max-width:300px}.gauge-number{font-size:39px}
+ .mini-grid{height:230px;flex-basis:230px}.mini-value{font-size:35px}.mini-expected{font-size:12px}}
+@media(max-width:700px){.main-layout{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+ .gauge-card{padding:5px 4px}.card-label{font-size:12px}.mini-title{font-size:9px}
+ .mini-expected{font-size:9px}.brand{width:150px}.brand strong{font-size:14px}.header-right{gap:5px}}
+</style><script defer>'use strict';
+// Pi application is read-only: data comes from ESP32 via local read-only proxy.
+const DEMO = new URLSearchParams(location.search).get('demo') === '1';
+const $ = id => document.getElementById(id);
+const M = new Map(); // "module:id" -> last valid observation, retained during module rotation
+const seriesCache = new Map();
+const state = {connected:false,logger:false,offline:true,scanner:null,monitor:null,storage:null,screen:'dash',issues:[],trend:'coolant',historyAt:0,historyKey:'',awaiting:false,lastSeen:0};
+const F = (c)=>c*9/5+32;
+const normal = (x)=>Number.isFinite(Number(x)) ? Number(x) : NaN;
+const pretty = (x,dec=0)=>Number.isFinite(x)?x.toFixed(dec):'--';
+const freshEnough = (module)=>module===2?720000:35000;
+const midi = (m,id)=>`${m}:${id}`;
+function datum(module,id,ageLimit){
+  const d=M.get(midi(module,id));
+  if(!d)return null;
+  const max=ageLimit??freshEnough(module);
+  const age=Date.now()-d.seenAt;
+  return age<max?{...d,age}:null;
+}
+function value(module,id){return datum(module,id)?.value??NaN}
+function colorFor(x){return x==='critical'?'#ff6574':x==='warn'?'#ffbb5f':x==='ok'?'#46dca4':'#41baff'}
+function escapeText(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function capture(module,items,seenAt=Date.now()){
+  for(const x of items||[]){
+    if(x.valid===0||x.valid===false||x.stale===1||x.stale===true)continue;
+    const v=Number(x.value);
+    if(!Number.isFinite(v))continue;
+    // Preserve the sampled time so a browser reconnect cannot make old data "fresh".
+    const sampleAge=Math.max(0,Math.min(120000,Number(x.ageMs)||0));
+    M.set(midi(module,x.id),{value:v,unit:x.unit||'',expected:x.expected||'',state:x.state||'neutral',sampleMs:x.sampleMs||0,seenAt:seenAt-sampleAge});
+  }
+}
+function polar(cx,cy,r,degrees){const a=(degrees-90)*Math.PI/180;return [cx+r*Math.cos(a),cy+r*Math.sin(a)]}
+function arc(cx,cy,r,start,end){const a=polar(cx,cy,r,start),b=polar(cx,cy,r,end);return `M ${a[0].toFixed(2)} ${a[1].toFixed(2)} A ${r} ${r} 0 ${end-start>180?1:0} 1 ${b[0].toFixed(2)} ${b[1].toFixed(2)}`}
+function drawGauge(name,{n,min,max,display,unit,level='neutral',band=null,target=null,rangeText='',minLabel=null,reference=''}){
+  const dom=document.querySelector(`[data-gauge="${name}"]`);if(!dom)return;
+  const missing=!Number.isFinite(n),clamp=v=>Math.max(0,Math.min(1,(v-min)/(max-min)));
+  const start=-123,end=123,full=246,cx=110,cy=78,r=72;
+  const angle=v=>start+full*clamp(v),line=(r0,r1,deg,color,width=2)=>{
+    const a=polar(cx,cy,r0,deg),b=polar(cx,cy,r1,deg);
+    return `<path d="M${a.join(' ')}L${b.join(' ')}" stroke="${color}" stroke-width="${width}" stroke-linecap="round"/>`;
+  };
+  const path=(a,b)=>arc(cx,cy,r,a,b);
+  const nColor=missing?'#5b7186':colorFor(level);
+  let referenceBand='';
+  if(band&&Number.isFinite(band[0])&&Number.isFinite(band[1])){
+    const lo=angle(band[0]),hi=angle(band[1]);
+    if(hi>lo){
+      referenceBand=`<path d="${path(lo,hi)}" stroke="#48ee9e" stroke-opacity=".48" stroke-width="19" stroke-linecap="butt" fill="none"/>
+      ${line(57,86,lo,'#76ffba',2.6)}${line(57,86,hi,'#76ffba',2.6)}`;
+    }
+  }
+  if(Number.isFinite(target)){
+    const t=angle(target);
+    referenceBand+=`<circle cx="${polar(cx,cy,r,t)[0]}" cy="${polar(cx,cy,r,t)[1]}" r="5" fill="#45dc9d" stroke="#061420" stroke-width="2"/>
+    ${line(57,87,t,'#7dffc0',3.3)}`;
+  }
+  const ticks=Array.from({length:11},(_,i)=>{
+    const t=start+full*i/10;return line(i%5===0?57:62,65,t,i%5===0?'#b7cbdf':'#55758e',i%5===0?2.5:1.3)
+  }).join('');
+  const portion=!missing?angle(n):start;
+  const active=missing?'':`<path d="${path(start,portion)}" stroke="${nColor}" stroke-width="10" stroke-linecap="round" fill="none"/>
+  ${line(56,91,portion,'#f6fbff',3)}<circle cx="${polar(cx,cy,r,portion)[0]}" cy="${polar(cx,cy,r,portion)[1]}" r="4.2" fill="#f8feff" stroke="#122b39" stroke-width="1.8"/>`;
+  const refClass=level==='critical'?'bad':level==='warn'?'warn':(!band&&!Number.isFinite(target)?'secondary':'');
+  dom.innerHTML=`<svg class="gauge-svg" viewBox="0 0 220 160" role="img" aria-label="${escapeText(name)} ${missing?'unavailable':display+' '+unit}. ${escapeText(reference)}">
+    <path d="${path(start,end)}" stroke="#24384e" stroke-width="15" stroke-linecap="round" fill="none"/>
+    ${referenceBand}${ticks}${active}
+    <text class="gauge-number" x="110" y="83">${escapeText(display)}</text>
+    <text class="gauge-unit" x="110" y="106">${escapeText(unit)}</text>
+    <text class="gauge-target ${refClass}" x="110" y="141">${escapeText(reference||'REFERENCE UNAVAILABLE')}</text>
+    <text class="gauge-endpoint" x="17" y="155">${escapeText(minLabel??String(min))}</text>
+    <text class="gauge-endpoint" x="203" y="155" text-anchor="end">${escapeText(rangeText||String(max))}</text>
+  </svg>`;
+  const card=$('card-'+name);card.classList.toggle('missing',missing);card.classList.toggle('warn',level==='warn');card.classList.toggle('bad',level==='critical');
+}
+const hold=new Map();
+function persists(key,condition,requiredMs){const t=Date.now();if(!condition){hold.delete(key);return false;}if(!hold.has(key))hold.set(key,t);return t-hold.get(key)>=requiredMs}
+function derive(){
+  const rpm=value(0,'rpm'), speed=value(0,'speed'), idle=value(0,'idleTarget');
+  const coolant=value(0,'coolant'),rail=value(0,'rail'),rT=value(0,'railTarget');
+  const boost=value(0,'boost'), bT=value(0,'boostTarget'), atmos=value(0,'atmos');
+  const low=value(0,'lowFuel'),lowMin=value(0,'lowFuelMin');
+  const oil=value(0,'oilTemp'),trans=value(2,'temp');
+  const rpmIdle=Number.isFinite(speed)&&speed<1&&Number.isFinite(rpm)&&rpm>350&&rpm<1200&&Number.isFinite(idle);
+  const rpmError=rpmIdle?Math.abs(rpm-idle):NaN;
+  const railErr=Number.isFinite(rail)&&Number.isFinite(rT)?rail-rT:NaN;
+  const railTol=Number.isFinite(rT)?Math.max(50,Math.abs(rT)*.10):NaN;
+  const haveBoostGauge=Number.isFinite(boost)&&Number.isFinite(atmos);
+  const boostValue=haveBoostGauge?(boost-atmos)*.0145038:boost;
+  const boostTarget=Number.isFinite(bT)?(haveBoostGauge?(bT-atmos)*.0145038:bT):NaN;
+  const boostTol=haveBoostGauge?2.9:200; // 200hPa ~= 2.9 psi
+  const coolantLevel=Number.isFinite(coolant)?
+    coolant>115?'critical':coolant>100?'warn':coolant>=80?'ok':'neutral':'neutral';
+  const rpmLevel=rpmIdle?(rpmError>160?'warn':rpmError>75?'warn':'ok'):'neutral';
+  const railLevel=Number.isFinite(railErr)&&Number.isFinite(railTol)?
+    Math.abs(railErr)<=railTol?'ok':
+    Math.abs(railErr)>2*railTol&&persists('rail-gauge-red',true,10000)?'critical':'warn':'neutral';
+  if(!(Number.isFinite(railErr)&&Number.isFinite(railTol)&&Math.abs(railErr)>2*railTol))persists('rail-gauge-red',false,10000);
+  const boostErr=Number.isFinite(boostValue)&&Number.isFinite(boostTarget)?Math.abs(boostValue-boostTarget):NaN;
+  const boostLevel=Number.isFinite(boostErr)?
+    boostErr<=boostTol?'ok':boostErr>2*boostTol&&persists('boost-gauge-red',true,10000)?'critical':'warn':'neutral';
+  if(!(Number.isFinite(boostErr)&&boostErr>2*boostTol))persists('boost-gauge-red',false,10000);
+  drawGauge('rpm',{n:rpm,min:0,max:4500,display:pretty(rpm),unit:'RPM',level:rpmLevel,
+    band:rpmIdle?[idle-75,idle+75]:null,target:rpmIdle?idle:null,rangeText:'4500',
+    reference:rpmIdle?'IDLE TARGET '+pretty(idle)+' RPM':Number.isFinite(rpm)&&rpm>350?'LOAD-DEPENDENT':'IDLE TARGET —'});
+  drawGauge('coolant',{n:coolant,min:30,max:120,display:pretty(Number.isFinite(coolant)?F(coolant):NaN),unit:'°F',
+    band:[80,100],level:coolantLevel,rangeText:'248°',minLabel:'86°',reference:'WARM 176–212°F'});
+  drawGauge('rail',{n:rail,min:0,max:1600,display:pretty(rail),unit:'bar',level:railLevel,
+    band:Number.isFinite(rT)?[rT-railTol,rT+railTol]:null,target:Number.isFinite(rT)?rT:null,rangeText:'1600',
+    reference:Number.isFinite(rT)?'ECU TARGET '+pretty(rT)+' bar':'ECU TARGET —'});
+  drawGauge('boost',{n:boostValue,min:haveBoostGauge?-2:500,max:haveBoostGauge?27:3000,
+    display:pretty(boostValue,haveBoostGauge?1:0),unit:haveBoostGauge?'psi(g)':'hPa abs',level:boostLevel,
+    band:Number.isFinite(boostTarget)?[boostTarget-boostTol,boostTarget+boostTol]:null,
+    target:Number.isFinite(boostTarget)?boostTarget:null,rangeText:haveBoostGauge?'27':'3000',
+    reference:Number.isFinite(boostTarget)?'ECU TARGET '+pretty(boostTarget,haveBoostGauge?1:0)+(haveBoostGauge?' psi':' hPa'):'ECU TARGET —'});
+  setMini('speed',Number.isFinite(speed)?speed*.621371:NaN,0,'Driver / road dependent','neutral');
+  setMini('fuel',low,1,Number.isFinite(lowMin)?'ECU MIN '+pretty(lowMin,1)+' bar':'Idle guide 2–2.5 bar',
+    Number.isFinite(lowMin)&&Number.isFinite(low)&&low<lowMin?'warn':Number.isFinite(low)?'ok':'neutral');
+  setMini('trans',Number.isFinite(trans)?F(trans):NaN,0,'Warm guide 140–221°F',Number.isFinite(trans)&&trans>105?'warn':'neutral');
+  setMini('oil',Number.isFinite(oil)?F(oil):NaN,0,'Warm 176–230°F',Number.isFinite(oil)&&oil>120?'warn':'neutral');
+  // Only explicitly supported, persisted, actionable alerts.
+  const issues=[];
+  const put=(key,level,title,explain,trigger,delay)=>{if(persists(key,trigger,delay))issues.push({key,level,title,explain})};
+  const mon=state.monitor||{},hist=state.storage||{},engine=(mon.modules||[]).find(m=>m.id===0);
+  put('heat-high','critical','Coolant dangerously high','Coolant above 115°C (239°F); reduce load and investigate promptly.',Number.isFinite(coolant)&&coolant>115,8000);
+  put('heat-warn','warn','Coolant above warm range','Coolant above 105°C (221°F) for several seconds.',Number.isFinite(coolant)&&coolant>105&&coolant<=115,12000);
+  put('fuel-low','critical','Low-side fuel pressure below ECU minimum','Actual '+pretty(low,2)+' bar; ECU minimum '+pretty(lowMin,2)+' bar.',Number.isFinite(low)&&Number.isFinite(lowMin)&&low<lowMin,8000);
+  put('rail-gap','warn','Rail pressure not tracking ECU target','Actual '+pretty(rail,0)+' bar; ECU target '+pretty(rT,0)+' bar. Check under steady operating conditions.',Number.isFinite(railErr)&&Number.isFinite(railTol)&&Math.abs(railErr)>2*railTol,18000);
+  put('boost-gap','warn','Boost not tracking ECU target','Actual and ECU boost targets differ; confirm under steady load.',Number.isFinite(boostValue)&&Number.isFinite(boostTarget)&&Math.abs(boostValue-boostTarget)>2*boostTol,20000);
+  if(Number(hist.writeErrors)>0)issues.push({key:'sd-errors',level:'critical',title:'SD history write failures',explain:hist.writeErrors+' verified write errors since scanner boot. Check card and wiring.'});
+  if(Number(hist.sensorOverflow)>0)issues.push({key:'sd-overflow',level:'warn',title:'History sensor capacity exceeded',explain:'Some measurement series may not be captured; overflow count '+hist.sensorOverflow});
+  if(mon.enabled&&mon.ignitionSignal==='HIGH'&&Number(mon.consecutiveEngineFailures)>=3)issues.push({key:'retries',level:'warn',title:'Engine ECU repeatedly unavailable',explain:mon.consecutiveEngineFailures+' consecutive failures; retry after '+(mon.engineRetryInSeconds||0)+'s. Logging will keep trying.'});
+  if(mon.enabled&&mon.ignitionSignal==='HIGH'&&state.lastSeen&&Date.now()-state.lastSeen>45000)issues.push({key:'no-telemetry',level:'warn',title:'Engine telemetry temporarily unavailable',explain:'No new scanner measurements for at least 45 seconds. The logger may be reconnecting or visiting another module.'});
+  if(mon.enabled&&hist.storage!=='microSD'&&hist.enabled===true)issues.push({key:'sd-backend',level:'warn',title:'microSD history not active',explain:'The scanner is not reporting microSD as its history backend.'});
+  if(state.offline)issues.unshift({key:'offline',level:'warn',title:'Scanner connection lost',explain:'This Raspberry Pi cannot currently reach the ESP32; saved readings are not live.'});
+  issues.sort((a,b)=>(a.level==='critical'?0:a.level==='warn'?1:2)-(b.level==='critical'?0:b.level==='warn'?1:2));
+  state.issues=issues;
+  renderAlerts();
+}
+function setMini(id,v,dec,expected,level){
+  const el=$('v-'+id);el.textContent=pretty(v,dec);
+  $('e-'+id).textContent=expected;
+  const card=$('mini-'+id);card.classList.toggle('missing',!Number.isFinite(v));card.classList.toggle('warn',level==='warn');card.classList.toggle('bad',level==='critical');
+}
+function renderAlerts(){
+  const list=state.issues,count=state.issues.length;
+  const monitored=!!state.monitor?.enabled,haveFresh=!!datum(0,'coolant');
+  $('issueCount').textContent=count?count+' ISSUE'+(count>1?'S':''):(monitored&&haveFresh?'ALL CLEAR':monitored?'NO DATA':'PAUSED');
+  $('issueCount').className='count '+(list.some(x=>x.level==='critical')?'critical':count?'warning':'');
+  if(!count){$('alertPreview').innerHTML='<div class="all-clear">'+(monitored&&haveFresh?'No active issues':monitored?'Waiting for valid measurements':'Automatic monitoring paused')+'</div>';}
+  else{$('alertPreview').innerHTML=list.slice(0,2).map(x=>issueHTML(x,true)).join('');}
+  $('alertList').innerHTML=!count?'<div class="empty">'+(monitored&&haveFresh?'✓ No active alerts from available readings':'No current measurements to evaluate')+'</div>':list.map(x=>issueHTML(x,false)).join('');
+}
+function issueHTML(x,compact){return `<div class="issue-row ${x.level}"><span class="issue-icon">${x.level==='critical'?'!':x.level==='warn'?'⚠':'i'}</span><div class="issue-message">${escapeText(x.title)}${compact?'':`<div style="font-weight:400;font-size:11px;color:#a9bdd0;margin-top:6px">${escapeText(x.explain)}</div>`}</div>${compact?`<span class="issue-tag">${x.level}</span>`:''}</div>`}
+function setHeader(){
+  const m=state.monitor||{},h=state.storage||{},st=state.scanner||{},sd=h.storage==='microSD';
+  const conn=$('connLed'),logger=$('loggerText'),sub=$('connectionSub');
+  if(state.offline){conn.className='led bad';logger.textContent='SCANNER OFFLINE';sub.textContent='Check ESP32 / Wi-Fi';}
+  else if(!m.enabled){conn.className='led warn';logger.textContent='LOGGER PAUSED';sub.textContent='Enable from phone / scanner WebUI';}
+  else if(m.ignitionSignal==='LOW'){conn.className='led warn';logger.textContent='IGNITION LOW';sub.textContent='Logging suspended until key ON';}
+  else if(st.connected){conn.className='led ok';logger.textContent='AUTO LOGGING';sub.textContent=st.module||'ECU connected';}
+  else{conn.className='led warn';logger.textContent='AUTO STANDBY';sub.textContent='Waiting for ECU / retry';}
+  $('sdText').textContent=sd?(h.writeErrors?'SD ERROR':'SD READY'):'SD UNKNOWN';
+  $('sdText').style.color=sd&&!h.writeErrors?'#68dfab':'#ffba66';
+  $('sdSub').textContent=sd?'History storage':'Check storage';
+}
+function setClock(){const date=new Date();$('clock').textContent=date.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});}
+function moduleView(){const m=state.monitor||{},mod=m.modules||[];const names={0:['Engine / CR2','OBD 7'],1:['ABS / ESP','OBD 9'],2:['Transmission / EGS','OBD 11'],3:['HVAC','OBD 15']};
+ $('moduleGrid').innerHTML=[0,2,1,3].map(id=>{const d=mod.find(x=>Number(x.id)===id)||{};const live=state.scanner?.connected&&Number(state.scanner.moduleId)===id;return `<article class="module-tile"><div class="module-header">${names[id][0]}<span class="module-indicator ${live?'connected':''}">${live?'LIVE':'ROTATING'}</span></div><div class="module-sub">${names[id][1]} · read-only diagnostic session</div><div class="module-stats"><div><strong>${Number(d.connects)||0}</strong>visits this boot</div><div><strong>${Number(d.historyWrites)||0}</strong>samples</div><div><strong>${Number(d.failures)||0}</strong>failures</div></div></article>`}).join('');
+ $('moduleFooter').textContent='Auto schedule: '+(m.enabled?'enabled':'paused')+' · Ignition input: '+(m.ignitionSignal||'unknown')+' · Open scanner WebUI on phone/computer for detailed diagnostics.';
+}
+async function get(path){const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);return r.json()}
+function makeDemo(){
+ const sensor=(id,v,unit)=>({id,value:String(v),unit,valid:1,stale:0,ageMs:200,sampleMs:12345});
+ return {
+  scanner:{firmware:'DEMO',connected:1,polling:1,moduleId:0,module:'Engine / CR2'},
+  monitor:{enabled:true,ignitionSignal:'HIGH',ignitionLowObserved:true,modules:[{id:0,connects:4,historyWrites:195,failures:0},{id:2,connects:2,historyWrites:34,failures:0},{id:1,connects:1,historyWrites:11,failures:0},{id:3,connects:0,historyWrites:0,failures:0}]},
+  storage:{storage:'microSD',writeErrors:0,sensorOverflow:0,tiers:[{name:'recent',records:425}]},
+  data:{module:'Engine / CR2',items:[sensor('rpm',846,'rpm'),sensor('idleTarget',840,'rpm'),sensor('speed',0,'km/h'),sensor('coolant',87,'°C'),sensor('rail',304,'bar'),sensor('railTarget',300,'bar'),sensor('boost',1025,'hPa'),sensor('boostTarget',1020,'hPa'),sensor('atmos',1006,'hPa'),sensor('oilTemp',95,'°C'),sensor('lowFuel',2.3,'bar'),sensor('lowFuelMin',1.9,'bar')]},
+  trans:{module:'Transmission / EGS',items:[sensor('temp',78,'°C')]}
+ }
+}
+let demo=makeDemo();
+async function tick(){
+  if(state.awaiting)return;state.awaiting=true;
+  try{
+    if(DEMO){
+      state.scanner=demo.scanner;state.monitor=demo.monitor;state.storage=demo.storage;state.offline=false;
+      capture(0,demo.data.items);capture(2,demo.trans.items);state.lastSeen=Date.now();
+      $('demoTag').hidden=false;
+    }else{
+      const [scanner,monitor,storage]=await Promise.all([get('/api/status'),get('/api/monitor/status'),get('/api/history/status')]);
+      state.scanner=scanner;state.monitor=monitor;state.storage=storage;state.offline=false;
+      if(scanner.connected){
+        try{
+          const sensors=await get('/api/sensors');
+          const module=Number(scanner.moduleId);
+          if(sensors.module&&Array.isArray(sensors.items)){
+            capture(module,sensors.items);if(sensors.items.some(x=>x.valid&&!x.stale)){state.lastSeen=Date.now()}
+          }
+        }catch(e){}
+      }
+    }
+  }catch(e){state.offline=true;}
+  finally{state.awaiting=false;setHeader();derive();moduleView();setClock();}
+}
+const trendDefs={coolant:{module:0,key:'coolant',name:'Coolant °F',convert:F,paired:null},rail:{module:0,key:'rail',name:'Rail bar',convert:x=>x,paired:'railTarget'},boost:{module:0,key:'boost',name:'MAP hPa (absolute)',convert:x=>x,paired:'boostTarget'},rpm:{module:0,key:'rpm',name:'Engine RPM',convert:x=>x,paired:'idleTarget'},temp:{module:2,key:'temp',name:'Transmission °F',convert:F,paired:null}};
+function drawTrend(points,target,def){
+ const svg=$('trendChart');if(!points.length){svg.innerHTML='<text x="380" y="110" text-anchor="middle" fill="#8daac4">No recorded readings for this metric yet</text>';return;}
+ const minT=Math.min(...points.map(x=>x.t)),maxT=Math.max(...points.map(x=>x.t));const vals=[...points.map(x=>x.v),...target.map(x=>x.v)];let low=Math.min(...vals),high=Math.max(...vals);const pad=(high-low||1)*.12;low-=pad;high+=pad;
+ const px=t=>40+(t-minT)/(maxT-minT||1)*690,py=v=>186-(v-low)/(high-low)*153;
+ const line=data=>data.map((p,i)=>(i?'L':'M')+px(p.t).toFixed(1)+' '+py(p.v).toFixed(1)).join(' ');
+ const ylines=[0,.25,.5,.75,1].map(f=>{const y=186-f*153,v=low+f*(high-low);return `<line x1="40" y1="${y}" x2="733" y2="${y}" stroke="#213a51"/><text x="35" y="${y+3}" text-anchor="end" fill="#759bb9" font-size="10">${pretty(v,0)}</text>`}).join('');
+ svg.innerHTML=ylines+`<path d="${line(points)}" fill="none" stroke="#43c6ff" stroke-width="3" stroke-linejoin="round"/>`+(target.length?`<path d="${line(target)}" fill="none" stroke="#74dba5" stroke-width="2" stroke-dasharray="6 4"/>`:'')+`<text x="42" y="209" fill="#8caec7" font-size="11">${new Date(minT*1000).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</text><text x="730" y="209" fill="#8caec7" font-size="11" text-anchor="end">${new Date(maxT*1000).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</text>`;
+}
+async function loadTrend(){if(state.screen!=='trends')return;const key=state.trend,def=trendDefs[key],now=Date.now();if(state.historyKey===key&&now-state.historyAt<30000)return;state.historyKey=key;state.historyAt=now;
+ $('trendInfo').textContent=def.name+' · cyan = actual'+(def.paired?' · green dashed = ECU target':'')+' · reading saved history';
+ if(DEMO){const t=Math.floor(Date.now()/1000);const sample=Array.from({length:35},(_,i)=>({t:t-35*50+i*50,v:def.convert(key==='coolant'?86+i*.08:key==='rpm'?850+Math.sin(i/2)*26:key==='rail'?300+Math.sin(i/3)*13:key==='boost'?1025+Math.sin(i/3)*60:78+i*.1)}));drawTrend(sample,[],def);return;}
+ try{
+  const url=(id)=>'/api/history/data?module='+def.module+'&id='+encodeURIComponent(id)+'&range=1h';
+  const [actual,target]=await Promise.all([get(url(def.key)),def.paired?get(url(def.paired)):Promise.resolve({points:[]})]);
+  if(state.screen!=='trends'||state.trend!==key)return;
+  const cv=data=>(data.points||[]).map(p=>({t:Number(p.t),v:def.convert(Number(p.avg))})).filter(p=>Number.isFinite(p.t)&&Number.isFinite(p.v));
+  const arr=cv(actual),t=cv(target);drawTrend(arr,t,def);
+  $('trendInfo').textContent=def.name+' · '+arr.length+' saved points'+(t.length?' · dashed ECU target':'')+(arr.length?' · recent averages may be combined':'');
+ }catch(e){$('trendInfo').textContent='Could not retrieve stored history from ESP32';}
+}
+function nav(tab){state.screen=tab;document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.dataset.page===tab));document.querySelectorAll('.nav-btn').forEach(b=>{b.classList.toggle('active',b.dataset.nav===tab);if(b.dataset.nav===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});if(tab==='trends')loadTrend()}
+function init(){document.querySelectorAll('[data-nav]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.nav)));document.querySelectorAll('[data-trend]').forEach(b=>b.addEventListener('click',()=>{state.trend=b.dataset.trend;state.historyAt=0;document.querySelectorAll('[data-trend]').forEach(x=>x.classList.toggle('selected',x===b));loadTrend()}));setClock();tick();setInterval(tick,2200);setInterval(setClock,15000);setInterval(()=>{if(state.screen==='trends')loadTrend()},30000)}
+init();
+</script>
+</head><body>
+<div class="dashboard" id="dashboard">
+<header class="topbar">
+  <div class="brand"><div class="mark" aria-hidden="true">S</div><div><strong>SPRINTER</strong><span>MONITOR <b>·</b> OM612</span></div></div>
+  <div class="connection"><span id="connLed" class="led"></span><div><strong id="loggerText">CONNECTING</strong><small id="connectionSub">Checking scanner</small></div></div>
+  <div class="header-right"><div class="sd-area"><span class="sd-icon">SD</span><div><b id="sdText">CHECKING</b><small id="sdSub">Storage</small></div></div><div class="clock" id="clock">--:--</div></div>
+</header>
+<main class="workspace">
+<section class="page active" data-page="dash" aria-label="Main dashboard">
+  <div class="main-layout"><div class="gauge-grid">
+    <article class="gauge-card" id="card-rpm"><div class="card-label">ENGINE RPM</div><div class="gauge" data-gauge="rpm"></div></article>
+    <article class="gauge-card" id="card-coolant"><div class="card-label">COOLANT</div><div class="gauge" data-gauge="coolant"></div></article>
+    <article class="gauge-card" id="card-rail"><div class="card-label">RAIL PRESSURE</div><div class="gauge" data-gauge="rail"></div></article>
+    <article class="gauge-card" id="card-boost"><div class="card-label">BOOST / MAP</div><div class="gauge" data-gauge="boost"></div></article>
+  </div>
+  <aside class="side-panel">
+    <div class="mini-grid">
+      <article class="mini" id="mini-speed"><div class="mini-title">SPEED</div><div class="mini-value" id="v-speed">--</div><div class="mini-unit">mph</div><div class="mini-expected" id="e-speed">Road-dependent</div></article>
+      <article class="mini" id="mini-fuel"><div class="mini-title">FUEL SUPPLY</div><div class="mini-value" id="v-fuel">--</div><div class="mini-unit">bar</div><div class="mini-expected" id="e-fuel">ECU min: --</div></article>
+      <article class="mini" id="mini-trans"><div class="mini-title">TRANS TEMP</div><div class="mini-value" id="v-trans">--</div><div class="mini-unit">°F</div><div class="mini-expected" id="e-trans">Guide: 140–221°F</div></article>
+      <article class="mini" id="mini-oil"><div class="mini-title">ENGINE OIL</div><div class="mini-value" id="v-oil">--</div><div class="mini-unit">°F</div><div class="mini-expected" id="e-oil">Warm: 176–230°F</div></article>
+    </div>
+    <div class="alert-card"><div class="alert-title"><strong>ATTENTION</strong><span id="issueCount" class="count">--</span></div><div id="alertPreview" class="alert-preview"><div class="all-clear">Waiting for measurements</div></div></div>
+  </aside></div>
+</section>
+<section class="page" data-page="alerts" aria-label="Alerts"><div class="section-head"><h2>Alerts & notifications</h2><div class="section-sub">Only actionable issues · no routine SD notifications</div></div><div class="scroll-pane" id="alertList"><div class="empty">Waiting for scanner data…</div></div><div class="footnote">Diagnostic guidance only. Alerts require persistent readings where possible; they are not factory fault thresholds.</div></section>
+<section class="page" data-page="trends" aria-label="Trends"><div class="section-head"><h2>Recorded trends</h2><div class="section-sub">Saved microSD history · one-hour view</div></div><div class="trend-controls"><button class="trend-opt selected" data-trend="coolant">Coolant</button><button class="trend-opt" data-trend="rail">Rail</button><button class="trend-opt" data-trend="boost">Boost</button><button class="trend-opt" data-trend="rpm">RPM</button><button class="trend-opt" data-trend="temp">Trans</button></div><div class="trend-surface"><div class="trend-info" id="trendInfo">Choose a metric to see stored history.</div><svg id="trendChart" viewBox="0 0 760 220" preserveAspectRatio="none" role="img" aria-label="Time-series of stored ECU samples"></svg></div><div class="footnote">Target overlays use time-aligned stored ECU values when available. Historical values may be averaged by the logger.</div></section>
+<section class="page" data-page="modules" aria-label="ECU modules"><div class="section-head"><h2>Module status</h2><div class="section-sub">The ESP32 owns connections and SD recording</div></div><div class="module-grid" id="moduleGrid"></div><div class="module-footer" id="moduleFooter">No module command buttons are sent from this display. Use your phone for diagnostics.</div></section>
+</main>
+<nav class="bottom-nav" aria-label="Dashboard sections">
+  <button class="nav-btn active" data-nav="dash" aria-current="page"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Dashboard</span></button>
+  <button class="nav-btn" data-nav="alerts"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 8-3 8-3 10h18c0-2-3-2-3-10M10 22h4"/></svg><span>Alerts</span></button>
+  <button class="nav-btn" data-nav="trends"><svg viewBox="0 0 24 24"><path d="M3 20V4m0 16h18M6 15l5-5 4 3 6-8"/></svg><span>Trends</span></button>
+  <button class="nav-btn" data-nav="modules"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4"/></svg><span>Modules</span></button>
+</nav>
+<div id="demoTag" class="demo-tag" hidden>DEMO DATA — NOT LIVE</div>
+</div>
+</body></html>
