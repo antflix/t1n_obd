@@ -281,7 +281,7 @@ async function loadTrend(){if(state.screen!=='trends')return;const key=state.tre
 }
 function nav(tab){state.screen=tab;document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.dataset.page===tab));document.querySelectorAll('.nav-btn').forEach(b=>{b.classList.toggle('active',b.dataset.nav===tab);if(b.dataset.nav===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});if(tab==='trends')loadTrend()}
 function init(){document.querySelectorAll('[data-nav]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.nav)));document.querySelectorAll('[data-trend]').forEach(b=>b.addEventListener('click',()=>{state.trend=b.dataset.trend;state.historyAt=0;document.querySelectorAll('[data-trend]').forEach(x=>x.classList.toggle('selected',x===b));loadTrend()}));setClock();tick();setInterval(tick,2200);setInterval(setClock,15000);setInterval(()=>{if(state.screen==='trends')loadTrend()},30000)}
-init();
+document.addEventListener('DOMContentLoaded',init,{once:true});
 </script>
 </head><body>
 <div class="dashboard" id="dashboard">
