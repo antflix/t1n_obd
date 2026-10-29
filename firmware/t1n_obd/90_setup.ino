@@ -78,6 +78,7 @@ web.on("/api/sd/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");w
 web.on("/api/sd/test",HTTP_POST,[]{String msg;bool ok=sdTestCard(msg);web.send(ok?200:409,"text/plain",msg);});
 web.on("/api/sd/upload",HTTP_POST,sdUploadFinish,sdUploadChunk);
 web.on("/api/sd/file",HTTP_GET,sdServeAssetDownload);
+web.on("/pi",HTTP_GET,[]{if(!sdServePage("/www/pi.html"))web.send(503,"text/plain","Pi dashboard not installed on scanner SD card");});
 web.on("/api/monitor/status",HTTP_GET,[]{
   web.sendHeader("Cache-Control","no-store");
   web.send(200,"application/json",monitorStatusJson());
