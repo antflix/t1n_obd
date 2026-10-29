@@ -143,6 +143,13 @@ bool readDTCs(){
   if(pn<2){dtcText="Service 18 response too short.\nRAW: "+bytesHex(r,rn);return false;}
   uint8_t count=p[1];String out="Reported DTC count: "+String(count)+"\n";size_t pos=2;int parsed=0;uint16_t codes[32];uint8_t statuses[32];int stored=0;
   while(pos+2<pn&&parsed<count&&stored<32){uint16_t code=((uint16_t)p[pos]<<8)|p[pos+1];uint8_t status=p[pos+2];codes[stored]=code;statuses[stored]=status;stored++;String desc=activeModule==MOD_EGS?egsKnownDtcDescription(code):engineKnownDtcDescription(code);out+=dtcCodeString(code)+"  raw="+hex2(p[pos])+hex2(p[pos+1])+"  status="+hex2(status);if(activeModule!=MOD_EGS)out+="  "+dtcStatusText(status);else out+="  (raw EGS status; bit meaning not yet source-validated)";if(desc.length())out+="\n  Meaning: "+desc+"\n  Note: exact failure variant may require ECU-specific subcode";else out+="\n  Meaning: no verified description in local catalog";out+="\n";pos+=3;parsed++;}
+  if(count>32 || parsed!=count){
+    dtcText="DTC response incomplete or exceeds 32 entries; previous snapshot retained.";
+    return false;
+  }
+  // A success is different from a communications failure. Only validated,
+  // complete snapshots participate in NEW/CLEARED/status-transition tracking.
+  monitorDtcSnapshot((uint8_t)activeModule,codes,statuses,(uint8_t)stored);
   if(count==0)out+="No stored DTCs reported.\n";
   out+="Summary RAW: "+bytesHex(r,rn)+"\n";
   if(activeModule==MOD_EGS&&stored){out+="\n=== EGS52 environment records (AP200 service 17) ===\n";for(int i=0;i<stored;i++){out+="\n"+dtcCodeString(codes[i])+" status="+hex2(statuses[i])+"\n";readEgsDtcEnvironment(codes[i],out);}}

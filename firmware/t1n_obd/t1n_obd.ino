@@ -35,13 +35,26 @@
 #include <WiFiClientSecure.h>
 #include <mbedtls/md.h>
 
+// Cross-sketch declarations for the autonomous logger; no simulation data is
+// presented as real ECU history.
+struct MonModule;
+void monitorDtcSnapshot(uint8_t mod,const uint16_t* codes,const uint8_t* statuses,uint8_t count);
+void monitorPersistedSample(uint8_t mod);
+void monitorBegin();
+void monitorTick();
+void monitorSetEnabled(bool on);
+bool monitorStorageSelfTest(String &report);
+bool monitorDtcSelfTest(String &report);
+String monitorStatusJson();
+String historyClockJson();
+
 // ---------------- Hardware ----------------
 int TX_PIN = 27; // default channel 2: engine OBD7
 int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.10.17-sd-stage1";
+static const char* FIRMWARE_VERSION = "1.10.24-auto-ui-test";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;

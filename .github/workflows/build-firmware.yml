@@ -2,9 +2,10 @@ name: Build ESP32 firmware
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/autonomous-sd-monitor-20261028']
     paths:
       - 'firmware/**'
+      - 'tests/**'
       - '.github/workflows/build-firmware.yml'
   workflow_dispatch:
 
@@ -108,6 +109,7 @@ jobs:
               m=re.search(r'String '+func+r'\(\)\{return R"HTML\((.*?)\)HTML";\}',src,re.S)
               if not m:raise SystemExit('Cannot extract SD page from '+p)
               contents[name]=m.group(1).encode('utf-8')
+          contents['www/pi.html']=pathlib.Path('firmware/sdcard/pi.html').read_bytes()
           version=re.search(r'FIRMWARE_VERSION\s*=\s*"([^"]+)"',
                             pathlib.Path('firmware/t1n_obd/t1n_obd.ino').read_text()).group(1)
           manifest={'version':version,'pinout':{'cs':22,'clk':18,'miso':19,'mosi':17},
@@ -117,6 +119,14 @@ jobs:
               for name,data in contents.items():z.writestr(name,data)
           print('SD assets:',[(k,len(v)) for k,v in contents.items()])
           PY
+      - name: Native DTC transition tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -I firmware/t1n_obd tests/monitor_dtc_diff.cpp -o /tmp/t1n-dtc-test
+          /tmp/t1n-dtc-test
+          g++ -std=c++17 -Wall -Wextra -Werror -I firmware/t1n_obd tests/monitor_ignition_gate.cpp -o /tmp/t1n-ignition-test
+          /tmp/t1n-ignition-test
+          g++ -std=c++17 -Wall -Wextra -Werror -I firmware/t1n_obd tests/monitor_retry_policy.cpp -o /tmp/t1n-retry-test
+          /tmp/t1n-retry-test
       - name: Compile ESP32 Dev Module with OTA partition
         run: |
           mkdir -p build dist
@@ -157,7 +167,15 @@ jobs:
           manifest={'version':version,'commit':commit,'built_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'firmware_url':f'https://github.com/{repo}/releases/download/latest/t1n-{version}.bin','sha256_url':f'https://github.com/{repo}/releases/download/latest/firmware.sha256','sha256':sha,'board':'ESP32 Dev Module','fqbn':'esp32:esp32:esp32:PartitionScheme=min_spiffs'}
           pathlib.Path('dist/manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
           PY
+      - name: Upload isolated test build
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: t1n-autolog-test
+          path: dist/*
+          retention-days: 7
       - name: Publish moving latest release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
