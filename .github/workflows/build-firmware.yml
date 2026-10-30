@@ -2,22 +2,26 @@ name: Build ESP32 firmware
 
 on:
   push:
-    branches: [main, 'feature/autonomous-sd-monitor-20261028']
+    branches: [main, 'feature/autonomous-sd-monitor-20261028', 'fix/**']
     paths:
       - 'firmware/**'
       - 'tests/**'
       - '.github/workflows/build-firmware.yml'
+  pull_request:
+    paths: ['firmware/**', 'tests/**', 'scripts/**', '.github/workflows/build-firmware.yml']
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: firmware-main
+  group: firmware-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -29,17 +33,28 @@ jobs:
           arduino-cli config init
           arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core update-index
-          arduino-cli core install esp32:esp32
+          arduino-cli core install esp32:esp32@3.3.12
           arduino-cli core list
+      - name: Offline native and client regression tests
+        run: python3 scripts/checks.py
+      - name: Browser fixtures (Chromium and WebKit)
+        run: |
+          npm install --no-save --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium webkit
+          node tests/web_dashboards.cjs
       - name: Inject Wi-Fi credential into build
         env:
           ANTNET_WIFI_PASSWORD: ${{ secrets.ANTNET_WIFI_PASSWORD }}
+          T1N_BUILD_REF: ${{ github.ref }}
         run: |
           python3 - <<'PY'
           import json, os, pathlib, sys
           password = os.environ.get("ANTNET_WIFI_PASSWORD", "")
           if not password:
-              sys.exit("ANTNET_WIFI_PASSWORD GitHub Actions secret is not configured")
+              if os.environ.get("T1N_BUILD_REF")=="refs/heads/main":
+                  sys.exit("Production build requires ANTNET_WIFI_PASSWORD")
+              print("No build credential available; firmware uses saved device settings")
+              sys.exit(0)
           pathlib.Path("firmware/t1n_obd/wifi_build_config.h").write_text(
               "#pragma once\n#define T1N_BUILD_WIFI_PASSWORD " + json.dumps(password) + "\n"
           )
@@ -94,39 +109,8 @@ jobs:
           pathlib.Path("firmware/t1n_obd/advanced_ui_gzip_generated.h").write_text("\n".join(lines)+"\n")
           print("Advanced UI compressed:",len(raw),"->",len(compressed),"bytes; saved",len(raw)-len(compressed))
           PY
-      - name: Package SD dashboard assets
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import hashlib,json,pathlib,re,zipfile
-          pages=[
-            ('firmware/t1n_obd/50_scanner_ui.ino','scannerPage','www/index.html'),
-            ('firmware/t1n_obd/40_advanced_ui.ino','advancedPage','www/advanced.html')]
-          d=pathlib.Path('dist');d.mkdir(exist_ok=True)
-          contents={}
-          for p,func,name in pages:
-              src=pathlib.Path(p).read_text()
-              m=re.search(r'String '+func+r'\(\)\{return R"HTML\((.*?)\)HTML";\}',src,re.S)
-              if not m:raise SystemExit('Cannot extract SD page from '+p)
-              contents[name]=m.group(1).encode('utf-8')
-          contents['www/pi.html']=pathlib.Path('firmware/sdcard/pi.html').read_bytes()
-          version=re.search(r'FIRMWARE_VERSION\s*=\s*"([^"]+)"',
-                            pathlib.Path('firmware/t1n_obd/t1n_obd.ino').read_text()).group(1)
-          manifest={'version':version,'pinout':{'cs':22,'clk':18,'miso':19,'mosi':17},
-                    'sha256':{p:hashlib.sha256(v).hexdigest() for p,v in contents.items()}}
-          contents['www/manifest.json']=(json.dumps(manifest,indent=2)+'\n').encode('utf-8')
-          with zipfile.ZipFile(d/'sdcard.zip','w',compression=zipfile.ZIP_DEFLATED) as z:
-              for name,data in contents.items():z.writestr(name,data)
-          print('SD assets:',[(k,len(v)) for k,v in contents.items()])
-          PY
-      - name: Native DTC transition tests
-        run: |
-          g++ -std=c++17 -Wall -Wextra -Werror -I firmware/t1n_obd tests/monitor_dtc_diff.cpp -o /tmp/t1n-dtc-test
-          /tmp/t1n-dtc-test
-          g++ -std=c++17 -Wall -Wextra -Werror -I firmware/t1n_obd tests/monitor_ignition_gate.cpp -o /tmp/t1n-ignition-test
-          /tmp/t1n-ignition-test
-          g++ -std=c++17 -Wall -Wextra -Werror -I firmware/t1n_obd tests/monitor_retry_policy.cpp -o /tmp/t1n-retry-test
-          /tmp/t1n-retry-test
+      - name: Package matching mobile and Pi SD dashboard assets
+        run: python3 scripts/sync_web_assets.py --check --zip dist/sdcard.zip
       - name: Compile ESP32 Dev Module with OTA partition
         run: |
           mkdir -p build dist

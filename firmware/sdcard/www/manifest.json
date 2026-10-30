@@ -1,0 +1,14 @@
+{
+  "version": "1.10.26-unified-sd-test",
+  "pinout": {
+    "cs": 22,
+    "clk": 18,
+    "miso": 19,
+    "mosi": 17
+  },
+  "sha256": {
+    "www/advanced.html": "4f725a6c0eb6db40dea6b8aad198650700943cded68693454092c3d0b60a22de",
+    "www/index.html": "664f9a131938d2ef05f4e0e5f0cdc9336126563fe8aa627289e4635cbac2db21",
+    "www/pi.html": "d1e8872c24bcb046f91ccbfc7ce23831c78661156e7819da9c7851159c9bce9b"
+  }
+}

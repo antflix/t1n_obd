@@ -62,7 +62,7 @@ bool sdServePage(const char*path) {
 }
 bool sdTestCard(String &result) {
   if(!sdReady){result=sdLastError;return false;}
-  if(busy||diagnosticSession){result="Disconnect diagnostic session before SD test";return false;}
+  if(monitorEnabled()||busy||jobConnect||diagnosticSession){result="Disconnect diagnostic session before SD test";return false;}
   static const char testData[]="T1N-SD-TEST-v1";
   const char*name="/.sdtest";
   SD.remove(name);
@@ -86,7 +86,7 @@ void sdUploadChunk() {
     sdUploadName=web.arg("name");
     if(!sdAllowedName(sdUploadName)){sdUploadError="Unsupported filename";return;}
     if(!sdReady){sdUploadError="microSD is not mounted";return;}
-    if(busy||jobConnect||diagnosticSession){sdUploadError="Disconnect scanner before SD upload";return;}
+    if(monitorEnabled()||busy||jobConnect||diagnosticSession){sdUploadError="Disconnect scanner before SD upload";return;}
     String part="/www/"+sdUploadName+".part";
     SD.remove(part);
     sdUploadFile=SD.open(part,FILE_WRITE);

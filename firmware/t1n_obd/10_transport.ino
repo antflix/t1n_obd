@@ -9,8 +9,21 @@ bool parseHexString(String s,uint8_t*out,size_t&n,size_t maxn);
 void applyPollGroups();
 String jsonEscape(String s){String o;for(size_t i=0;i<s.length();i++){char c=s[i];if(c==92){o+=char(92);o+=char(92);}else if(c==34){o+=char(92);o+=char(34);}else if(c==10){o+=char(92);o+='n';}else if(c!=13)o+=c;}return o;}
 String uptimeText(){uint32_t ms=millis();uint32_t sec=ms/1000;uint32_t min=sec/60;sec%=60;uint32_t hr=min/60;min%=60;char b[24];sprintf(b,"T+%02lu:%02lu:%02lu",(unsigned long)hr,(unsigned long)min,(unsigned long)sec);return String(b);}
-void activity(const String&s){String line="["+uptimeText()+"] "+s;activityLogText+=line+"\n";if(activityLogText.length()>50000)activityLogText.remove(0,12000);Serial.println("ACT "+line);}
-void logx(const String&s){String line="["+String(millis())+"ms] "+s;Serial.println(line);logText+=line+"\n";if(logText.length()>60000)logText.remove(0,15000);}
+uint32_t diagnosticLogAllocationErrors=0;
+void appendDiagnosticLog(String &target,const String &line,size_t capacity){
+  // Keep allocated capacity bounded rather than growing two 50–60 KiB Strings
+  // alongside Wi-Fi, UI responses and the history registry.
+  if(!target.reserve(capacity)){diagnosticLogAllocationErrors++;return;}
+  const size_t incoming=min((size_t)line.length(),capacity-1);
+  if(target.length()+incoming+1>capacity){
+    size_t remove=target.length()+incoming+1-capacity;
+    int newline=target.indexOf('\n',remove);
+    target.remove(0,newline>=0?(size_t)newline+1:remove);
+  }
+  target.concat(line.c_str(),incoming);target+='\n';
+}
+void activity(const String&s){String line="["+uptimeText()+"] "+s;appendDiagnosticLog(activityLogText,line,8192);Serial.println("ACT "+line);}
+void logx(const String&s){String line="["+String(millis())+"ms] "+s;Serial.println(line);appendDiagnosticLog(logText,line,16384);}
 void setStatus(const String&s){scannerStatus=s;logx("STATUS: "+s);}
 void waitUntilUs(uint32_t target){while((int32_t)(target-micros())>0){int32_t left=(int32_t)(target-micros());if(left>2000)delayMicroseconds(400);}}
 void waitReplayUs(uint32_t off){waitUntilUs(replayT0+off);}
@@ -42,7 +55,8 @@ size_t readUntilEcuFrame(uint8_t*out,size_t maxn,uint8_t*frame,size_t&fn,size_t 
   return n;
 }
 void waitP3Ready(){while((int32_t)(p3ReadyAtMs-millis())>0){web.handleClient();delay(1);}}
-bool sendKwpPayload(const uint8_t*payload,size_t plen,uint8_t*response,size_t&responseLen,uint32_t timeoutMs=0){responseLen=0;if(!cr2Connected&&!diagnosticSession){lastError="Not connected";return false;}if(!payload||plen==0){lastError="Empty payload";return false;}uint8_t tx[80];size_t tn=buildKwpFrame(payload,plen,tx,sizeof(tx));if(!tn){lastError="Bad KWP frame";return false;}if(activeModule==MOD_ABS && plen+5<=sizeof(tx)){memmove(tx+4,tx+3,plen);tx[0]=0x80;tx[3]=(uint8_t)plen;tx[plen+4]=checksum8(tx,plen+4);tn=plen+5;}if(!timeoutMs)timeoutMs=cfg.rxFirstTimeoutMs;waitP3Ready();uint8_t raw[512];size_t rn=0;if(moduleObdPin(activeModule)==15){sendPin15CompensatedFrame(tx,tn,11,75);rn=readPin15CompensatedResponse(raw,sizeof(raw),response,responseLen,256,timeoutMs);}else{uartOn();flushRx();sendSpacedBytes(tx,tn);rn=readUntilEcuFrame(raw,sizeof(raw),response,responseLen,256,timeoutMs);}lastRxHex=bytesHex(raw,rn);logx(rn?"RX RAW "+lastRxHex:"RX RAW <nothing>");if(!rn||!responseLen){lastError=rn?"No ECU frame (echo/noise)":"No ECU response";return false;}lastRxHex=bytesHex(response,responseLen);logx("RX ECU "+lastRxHex);lastGoodTrafficMs=millis();p3ReadyAtMs=millis()+cfg.p3MinMs;keepaliveMisses=0;lastError="";return true;}
+uint32_t transportRequests=0,transportFailures=0,transportLastMs=0,transportMaxMs=0;
+bool sendKwpPayload(const uint8_t*payload,size_t plen,uint8_t*response,size_t&responseLen,uint32_t timeoutMs=0){responseLen=0;if(!cr2Connected&&!diagnosticSession){lastError="Not connected";return false;}if(!payload||plen==0){lastError="Empty payload";return false;}uint8_t tx[80];size_t tn=buildKwpFrame(payload,plen,tx,sizeof(tx));if(!tn){lastError="Bad KWP frame";return false;}if(activeModule==MOD_ABS && plen+5<=sizeof(tx)){memmove(tx+4,tx+3,plen);tx[0]=0x80;tx[3]=(uint8_t)plen;tx[plen+4]=checksum8(tx,plen+4);tn=plen+5;}if(!timeoutMs)timeoutMs=cfg.rxFirstTimeoutMs;uint32_t transactionStart=millis();waitP3Ready();uint8_t raw[512];size_t rn=0;if(moduleObdPin(activeModule)==15){sendPin15CompensatedFrame(tx,tn,11,75);rn=readPin15CompensatedResponse(raw,sizeof(raw),response,responseLen,256,timeoutMs);}else{uartOn();flushRx();sendSpacedBytes(tx,tn);rn=readUntilEcuFrame(raw,sizeof(raw),response,responseLen,256,timeoutMs);}transportRequests++;transportLastMs=millis()-transactionStart;transportMaxMs=max(transportMaxMs,transportLastMs);if(!rn||!responseLen)transportFailures++;lastRxHex=bytesHex(raw,rn);logx(rn?"RX RAW "+lastRxHex:"RX RAW <nothing>");if(!rn||!responseLen){lastError=rn?"No ECU frame (echo/noise)":"No ECU response";return false;}lastRxHex=bytesHex(response,responseLen);logx("RX ECU "+lastRxHex);lastGoodTrafficMs=millis();p3ReadyAtMs=millis()+cfg.p3MinMs;keepaliveMisses=0;lastError="";return true;}
 bool responsePayload(const uint8_t*frame,size_t fn,const uint8_t*&p,size_t&pn){if(fn<5)return false;pn=frame[0]&0x3F;if(pn+4!=fn)return false;p=frame+3;return true;}
 bool responsePayloadStartsWith(const uint8_t*frame,size_t fn,const String&expectedHex){if(!expectedHex.length())return true;uint8_t exp[64];size_t en=0;if(!parseHexString(expectedHex,exp,en,sizeof(exp)))return false;const uint8_t*p=nullptr;size_t pn=0;if(!responsePayload(frame,fn,p,pn)||pn<en)return false;for(size_t i=0;i<en;i++)if(p[i]!=exp[i])return false;return true;}
 

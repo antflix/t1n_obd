@@ -5,6 +5,7 @@
 #include <SD.h>
 #include <time.h>
 #include "monitor_dtc_diff.h"
+#include "csv_journal.h"
 #include "monitor_ignition_gate.h"
 #include "monitor_retry_policy.h"
 extern uint32_t lastDtcScanMs; // defined in 90_setup.ino
@@ -12,7 +13,7 @@ void monitorLog(const String &type,ModuleId mod,const String &detail);
 void monitorSetEnabled(bool enable);
 
 struct MonModule {
-  uint32_t connects=0,failures=0,recentWrites=0,lastConnectionMs=0;
+  uint32_t connects=0,failures=0,recentWrites=0,lastConnectionMs=0,lastSampleMs=0,lastSwitchMs=0;
   uint32_t lastDtcEpoch=0,lastDtcUptimeMs=0;
   bool dtcBaseline=false;
   uint8_t dtcCount=0;
@@ -21,6 +22,7 @@ struct MonModule {
 };
 static MonModule monModules[6];
 static bool monEnabled=false,monOwnSession=false;
+bool monitorEnabled(){return monEnabled;}
 static uint32_t monStartMs=0,monRetryMs=0;
 static uint32_t monEgsDue=0,monAbsDue=0,monHzrDue=0;
 static ModuleId monTarget=MOD_ENGINE;
@@ -46,7 +48,7 @@ uint32_t monitorEngineFailureBackoff(){
 }
 
 void monitorPersistedSample(uint8_t mod){
-  if(mod<6)monModules[mod].recentWrites++;
+  if(mod<6){monModules[mod].recentWrites++;monModules[mod].lastSampleMs=millis();}
   if(mod==MOD_ENGINE){
     monLastEngineSampleMs=millis();
     if(monEngineRetry.onRealSample()){
@@ -101,16 +103,11 @@ bool monitorDtcEvent(uint8_t mod,uint16_t code,uint8_t status,const char *change
     monLastError="Cannot persist DTC changes: SD unavailable";
     return false;
   }
-  File f=SD.open("/t1nlogs/dtc_events.csv","a");
-  if(!f){monLastError="DTC event SD open failed";return false;}
-  size_t before=f.size();
-  const uint32_t epoch=historyNow();
-  f.print(epoch);f.print(',');f.print(millis());f.print(',');
-  f.print(mod);f.print(',');f.print(change);f.print(',');
-  char raw[7];snprintf(raw,sizeof(raw),"%04X%02X",code,status);
-  f.println(raw);f.flush();
-  bool okay=f.size()>before;
-  f.close();
+  char row[100];
+  int length=snprintf(row,sizeof(row),"%lu,%lu,%u,%s,%04X%02X\n",
+    (unsigned long)historyNow(),(unsigned long)millis(),mod,change,code,status);
+  bool okay=length>0&&(size_t)length<sizeof(row)
+    &&sdAppendCsv("/t1nlogs/dtc_events.csv",row,(size_t)length);
   if(okay){monDtcEvents++;return true;}
   monLastError="DTC event SD write failed";
   return false;
@@ -171,11 +168,13 @@ void monitorSetEnabled(bool enable){
 void monitorStart(ModuleId mod){
   // Never switch during an active diagnostic/test operation.
   if(busy||jobConnect||hzrFanOverrideActive)return;
+  const uint32_t switchStarted=millis();
   if(diagnosticSession)disconnectCurrentModule();
   autoReconnect=false;reconnectAtMs=0;
   requestedModule=mod;
   bool ok=connectModule(mod);
   uint32_t now=millis();
+  monModules[(uint8_t)mod].lastSwitchMs=now-switchStarted;
   if(!ok){
     monModules[(uint8_t)mod].failures++;
     monLastError=lastError;
@@ -276,7 +275,7 @@ String monitorStatusJson(){
     +",\"ignitionSignal\":\""+String(monIgnition.state==IGN_HIGH?"HIGH":
                     monIgnition.state==IGN_LOW?"LOW":"UNKNOWN")+"\""
     +",\"ignitionLowObserved\":"+String(monIgnition.sawLow?"true":"false")
-    +",\"ignitionQualified\":"+String(monIgnition.sawLow?"true":"false")
+    +",\"ignitionQualified\":"+String("false") // RX idle levels are not an electrically qualified ignition input
     +",\"absAutoQualified\":"+String(monAbsChannelQualified?"true":"false")
     +",\"consecutiveEngineFailures\":"+String(monEngineRetry.consecutive)
     +",\"engineRecoveries\":"+String(monEngineRetry.recoveries)
@@ -289,14 +288,18 @@ String monitorStatusJson(){
     +",\"clock\":"+historyClockJson()
     +",\"dtcEventsSinceBoot\":"+String(monDtcEvents)
     +",\"error\":\""+jsonEscape(monLastError)+"\",\"modules\":[";
-  const uint8_t ids[4]={0,2,1,3};
-  for(int i=0;i<4;i++){
+  const uint8_t ids[6]={0,2,1,3,5,4};
+  for(int i=0;i<6;i++){
     if(i)s+=",";
     uint8_t id=ids[i];const MonModule &m=monModules[id];
     s+="{\"id\":"+String(id)+",\"name\":\""+jsonEscape(moduleName((ModuleId)id))+"\""
       +",\"connects\":"+String(m.connects)+",\"failures\":"+String(m.failures)
       +",\"historyWrites\":"+String(m.recentWrites)
       +",\"lastConnectionUptimeMs\":"+String(m.lastConnectionMs)
+      +",\"lastSampleUptimeMs\":"+String(m.lastSampleMs)
+      +",\"lastSwitchMs\":"+String(m.lastSwitchMs)
+      +",\"scheduled\":"+String((id==0||id==2||id==3)?"true":"false")
+      +",\"nextVisitInSeconds\":"+String(id==0?0UL:(id==2?monEgsDue:id==3?monHzrDue:monAbsDue)>millis()?((id==2?monEgsDue:id==3?monHzrDue:monAbsDue)-millis())/1000UL:0UL)
       +",\"dtcSupported\":"+String((id==0||id==2)?"true":"false")
       +",\"dtcBaseline\":"+String(m.dtcBaseline?"true":"false")
       +",\"dtcLastEpoch\":"+String(m.lastDtcEpoch)
@@ -312,8 +315,8 @@ bool monitorStorageSelfTest(String &report){
   if(!sdCardReady()||!hReady||!hUsingSD){
     report="SD history backend unavailable";return false;
   }
-  if(busy||jobConnect||diagnosticSession){
-    report="Disconnect ECU before storage self-test";return false;
+  if(monEnabled||busy||jobConnect||diagnosticSession){
+    report="Pause monitoring and disconnect ECU before storage self-test";return false;
   }
   const uint8_t modules[]={0,2,1,3};
   for(uint8_t mod:modules){
@@ -370,4 +373,40 @@ bool monitorDtcSelfTest(String &report){
   report=ok?"DTC baseline, reordering, new, changed and no-longer-reported: PASS (synthetic, no ECU access)"
     :"DTC comparison failed on ESP32";
   return ok;
+}
+
+void monitorDtcSend(){
+  web.sendHeader("Cache-Control","no-store");web.setContentLength(CONTENT_LENGTH_UNKNOWN);web.send(200,"application/json","");BoundedJson out(sensorHttpSink);
+  out.raw("{\"ok\":true,\"modules\":[");
+  for(unsigned id=0;id<6;id++){
+    if(id)out.raw(",");
+    const MonModule&m=monModules[id];out.raw("{\"id\":");out.integer(id);
+    out.raw(",\"supported\":");out.raw(id==0||id==2?"true":"false");out.raw(",\"baseline\":");out.raw(m.dtcBaseline?"true":"false");
+    out.raw(",\"lastScanEpoch\":");out.integer(m.lastDtcEpoch);out.raw(",\"lastScanUptimeMs\":");out.integer(m.lastDtcUptimeMs);out.raw(",\"codes\":[");
+    for(unsigned j=0;j<m.dtcCount;j++){if(j)out.raw(",");char code[5];snprintf(code,sizeof(code),"%04X",m.codes[j]);out.raw("{\"rawCode\":");out.string(code);out.raw(",\"rawStatus\":");out.integer(m.statuses[j]);out.raw("}");}
+    out.raw("]}");
+  }
+  out.raw("]}");out.flush();web.sendContent("");
+}
+// Bounded read-only event tail. Zero epoch means UTC unknown. The CSV rows are
+// retained verbatim; no unverified code descriptions or status interpretations.
+void monitorEventsSend(const char *path){
+  web.sendHeader("Cache-Control","no-store");
+  if(!sdCardReady()){web.send(503,"application/json","{\"ok\":false,\"error\":\"SD unavailable\"}");return;}
+  if(busy||jobConnect){web.send(503,"application/json","{\"ok\":false,\"code\":\"DIAGNOSTIC_BUSY\",\"error\":\"Try between diagnostic requests\"}");return;}
+  File f=SD.open(path,FILE_READ);if(!f){
+    if(SD.exists(path)){web.send(503,"application/json","{\"ok\":false,\"error\":\"Event journal read failed\"}");return;}
+    web.send(200,"application/json","{\"ok\":true,\"rows\":[],\"truncated\":false}");return;
+  }
+  size_t start=f.size()>8192?f.size()-8192:0;bool truncated=start>0;
+  if(start){if(!f.seek(start,SeekSet)){f.close();web.send(503,"application/json","{\"ok\":false,\"error\":\"Event seek failed\"}");return;}while(f.available()&&f.read()!='\n'){} }
+  web.setContentLength(CONTENT_LENGTH_UNKNOWN);web.send(200,"application/json","");BoundedJson out(sensorHttpSink);out.raw("{\"ok\":true,\"rows\":[");
+  char row[180];unsigned n=0,rows=0;bool overflow=false;
+  while(f.available()){
+    int c=f.read();if(c<0)break;
+    if(c=='\n'){
+      if(n&&!overflow){row[n]=0;if(rows++)out.raw(",");out.string(row);}n=0;overflow=false;
+    }else if(c!='\r'){if(n<sizeof(row)-1)row[n++]=(char)c;else overflow=true;}
+  }
+  f.close();out.raw("],\"truncated\":");out.raw(truncated?"true":"false");out.raw("}");out.flush();web.sendContent("");
 }

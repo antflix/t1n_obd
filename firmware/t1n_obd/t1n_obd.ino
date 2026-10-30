@@ -25,6 +25,9 @@
     against a known-good scanner. Raw responses are always shown.
 */
 
+#include "sketch_forward.h"
+#define T1N_ENABLE_LEGACY_CR2_REPLAY 1
+#include <esp_system.h>
 #include <WiFi.h>
 #include <WebServer.h>
 #include <HardwareSerial.h>
@@ -40,6 +43,7 @@
 struct MonModule;
 void monitorDtcSnapshot(uint8_t mod,const uint16_t* codes,const uint8_t* statuses,uint8_t count);
 void monitorPersistedSample(uint8_t mod);
+bool monitorEnabled();
 void monitorBegin();
 void monitorTick();
 void monitorSetEnabled(bool on);
@@ -54,7 +58,7 @@ int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.10.24-auto-ui-test";
+static const char* FIRMWARE_VERSION = "1.10.26-unified-sd-test";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;

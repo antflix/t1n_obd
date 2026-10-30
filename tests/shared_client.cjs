@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict');
+const T=require('../firmware/web/monitor-client.js');
+const s={valid:1,stale:0,ageMs:1000,unit:'bar'};
+assert(T.fresh(s));assert(!T.fresh({...s,ageMs:25000}));assert(!T.fresh({...s,valid:0}));
+assert(T.aligned(s,{...s,ageMs:2000}));assert(!T.aligned(s,{...s,ageMs:5000}));
+assert(!T.aligned(s,{...s,unit:'V'}));
+const p={t:1793300000,avg:10,min:8,max:12,count:3,tier:0};
+assert.throws(()=>T.validateHistory({points:[{...p,avg:100}]}));
+assert.throws(()=>T.validateHistory({points:[{...p,avg:null}]}));
+assert.equal(T.segments([p,{...p,t:p.t+10},{...p,t:p.t+200}]).length,2);
+const status=T.status({connected:0},{enabled:true},{storage:'unavailable',enabled:false},true);
+assert(status.scannerOnline&&status.monitoringEnabled&&!status.ecuConnected&&!status.historyAvailable);
+let active=0,max=0;
+global.fetch=async()=>{active++;max=Math.max(max,active);await new Promise(r=>setTimeout(r,5));active--;return{ok:true,json:async()=>({})};};
+(async()=>{await Promise.all([T.request('/a'),T.request('/b'),T.request('/c')]);assert.equal(max,1);console.log('Shared freshness, alignment, history validation, gaps, independent status and serial requests PASS')})().catch(e=>{console.error(e);process.exitCode=1});

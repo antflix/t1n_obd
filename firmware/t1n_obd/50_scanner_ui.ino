@@ -1,26 +1,110 @@
+// Embedded recovery dashboard mirrors the SD-hosted WebUI exactly.
+// If the SD card is unavailable, historical charts remain unavailable;
+// never substitute browser-only samples for recorded measurements.
 #ifndef T1N_USE_GZIP_PAGE
-String scannerPage(){return R"HTML(<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#08111f"><title>T1N Scanner</title><style>
+String scannerPage(){return R"HTML(<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#08111f"><title>T1N Scanner</title><style>
 :root{--bg:#07101c;--panel:#0d1928;--line:#24374f;--text:#eef6ff;--muted:#8ea2ba;--blue:#2b7fff;--green:#2fc477;--red:#ef5b62}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:1120px;margin:auto;padding:14px 14px 90px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:5px 0 14px}.brand{font-size:22px;font-weight:850}.sub{color:var(--muted);font-size:12px}.statusDot{width:10px;height:10px;border-radius:50%;display:inline-block;background:#64748b;margin-right:7px}.statusDot.ok{background:var(--green);box-shadow:0 0 12px #2fc47788}.statusDot.bad{background:var(--red)}.statusDot.wait{background:#e7a93b;box-shadow:0 0 12px #e7a93b66}.nav{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;background:#091523;border:1px solid var(--line);padding:6px;border-radius:14px;position:sticky;top:6px;z-index:10}.nav button{background:transparent;color:var(--muted);border:0;border-radius:10px;padding:10px 4px;font-weight:750}.nav button.on{background:#173252;color:#fff}.view{display:none}.view.on{display:block}.hero{margin:12px 0;background:linear-gradient(145deg,#10233a,#0c1725);border:1px solid var(--line);border-radius:16px;padding:16px}.heroRow{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.moduleName{font-size:23px;font-weight:850}.badge{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:5px 9px;color:#b9c8d8;font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}button{border:0;border-radius:10px;padding:10px 13px;background:#24415f;color:#fff;font-weight:800;cursor:pointer}.primary{background:var(--blue)!important}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:9px;margin:10px 0}.metric{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px;min-height:116px}.metric{cursor:pointer;transition:border-color .15s,transform .15s}.metric:active{transform:scale(.99)}.metric.stale{opacity:.48}.metric.ok{border-color:#2f8f63}.metric.warn{border-color:#b88a36}.metric.bad{border-color:#c34f58}.metric .label{color:#9eb0c5;font-size:12px;min-height:30px}.metric .value{font-size:27px;font-weight:850;line-height:1.15;margin-top:4px;overflow-wrap:anywhere}.metric .unit{font-size:12px;color:#8296ad;margin-left:3px}.metric .imperial{font-size:12px;color:#a8bad0;margin-top:3px}.metric .expected{font-size:11px;color:#8296ad;line-height:1.35;margin-top:8px}.pairMetric{min-height:150px;grid-column:span 2}.pairGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}.pairSide{background:#091421;border:1px solid #1b2d42;border-radius:10px;padding:9px}.pairTag{font-size:10px;letter-spacing:.08em;color:#71869e;font-weight:850}.pairValue{font-size:22px;font-weight:850;line-height:1.15;margin-top:3px;overflow-wrap:anywhere}.compare{font-size:12px;font-weight:750;margin-top:9px;color:#a8bad0}.metric.ok .compare{color:#8fd6b3}.metric.warn .compare{color:#e4bf73}.metric.bad .compare{color:#f29aa0}.metric.ok .expected{color:#8fd6b3}.metric.warn .expected{color:#e4bf73}.metric.bad .expected{color:#f29aa0}.sectionTitle{font-size:17px;font-weight:850;margin:18px 2px 8px}.moduleGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}.module{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:14px}.module.active{border-color:#3b82f6;box-shadow:inset 0 0 0 1px #3b82f633}.module h3{margin:0 0 5px}.pin{font-size:24px;font-weight:850;color:#8dc0ff}.note{color:var(--muted);font-size:12px;line-height:1.45}.faultBox{white-space:pre-wrap;background:#050b12;border:1px solid var(--line);border-radius:13px;padding:13px;min-height:130px;font:13px ui-monospace,monospace;color:#dce9f7}.notice{border:1px solid #6b5229;background:#251d11;color:#ffd999;border-radius:12px;padding:10px 12px;margin:10px 0}.error{color:#ff9ca2;font-size:13px;margin-top:8px}.footerLink{display:block;text-align:center;margin-top:22px;color:#91bfff;text-decoration:none}.tiny{font-size:11px;color:#71869e}.spinner{display:inline-block;width:14px;height:14px;border:2px solid #ffffff55;border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}@keyframes spin{to{transform:rotate(360deg)}}.logBtns{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}@media(max-width:560px){.wrap{padding:10px 10px 80px}.nav{grid-template-columns:repeat(3,1fr)}.nav button{font-size:12px}.moduleName{font-size:20px}.metric .value{font-size:24px}}
  .trendBox{background:#0c1929;border:1px solid #315170;border-radius:15px;padding:15px;margin:12px 0}.trendBox svg{width:100%;height:auto;max-height:330px;min-height:160px;display:block}.trendTitle{font-size:17px;font-weight:800}.testResultGood{border-color:#248458;background:#0b231d}.testResultBad{border-color:#ac5158;background:#281518}.testResultWait{border-color:#997d38;background:#241f13}
 .multiPicker{display:none;max-height:235px;overflow:auto;border:1px solid var(--line);background:#071321;border-radius:12px;padding:8px;margin-top:10px;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:5px}.multiPicker.open{display:grid}.multiOption{padding:7px;display:flex;align-items:center;gap:8px;font-size:12px;border-radius:7px}.multiOption:has(input:checked){background:#173252}.multiOption input{accent-color:#51a7ff}.multiLegend{display:flex;flex-wrap:wrap;gap:9px;margin:9px 0}.multiLegend span{font-size:12px;padding:5px 8px;background:#11253a;border-radius:8px}.multiControls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.multiControls input[type="search"]{max-width:215px;width:100%;background:#081626;color:#fff;border:1px solid #36506d;padding:10px;border-radius:8px}.multiControls label{font-size:13px;color:#c7d9ec;display:flex;align-items:center;gap:4px}.multiControls input[type="checkbox"]{accent-color:#51a7ff}.trendBox svg.multiGraph{width:100%;height:auto;max-height:320px;min-height:190px;display:block;margin-top:10px}.multiHint{font-size:12px;color:#9aaec4;margin-top:6px}
+button,select,input{min-height:44px;font-size:16px}input,select{max-width:100%;background:#102338;color:#eef6ff;border:1px solid #365473;border-radius:8px;padding:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere}.nav{grid-template-columns:repeat(7,minmax(0,1fr))}@media(max-width:560px){.nav{grid-template-columns:repeat(3,minmax(0,1fr))}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.nav{display:flex;overflow-x:auto;position:sticky;top:0}.nav button{flex:0 0 auto;padding:10px 13px}}.trendBox{scroll-margin-top:76px}
 </style></head><body><div class="wrap"><div class="top"><div><div class="brand">T1N Scanner</div><div class="sub">2003 Sprinter diagnostic scanner · <span id="fw">...</span></div></div><div class="badge"><span id="dot" class="statusDot"></span><span id="linkState">Disconnected</span></div></div>
-<div class="nav"><button class="on" data-v="overview">Overview</button><button data-v="live">Live Data</button><button data-v="faults">Fault Codes</button><button data-v="tests">Tests</button><button data-v="modules">Modules</button><button data-v="logs">Logs</button></div>
+<div class="nav"><button class="on" data-v="overview">Overview</button><button data-v="live">Live Data</button><button data-v="faults">Fault Codes</button><button data-v="tests">Tests</button><button data-v="modules">Modules</button><button data-v="health">Alerts & settings</button><button data-v="logs">Logs</button></div>
 <section id="overview" class="view on"><div class="hero"><div class="heroRow"><div><div class="sub">ACTIVE MODULE</div><div id="moduleName" class="moduleName">Engine / CR2</div><div class="sub">Address <span id="addr">0x12</span> · OBD pin <b id="pin">7</b> · TLIN channel <b id="relay">K2</b> / RX GPIO <b id="relayGpio">37</b></div><div id="variantLine" class="sub" style="display:none">ECU variant <b id="variantId">--</b></div></div><span id="pollBadge" class="badge">Live data off</span></div><div id="err" class="error"></div><div class="actions"><span id="autoInfo" class="badge" aria-live="polite">Checking automatic logger…</span><button id="autoBtn" onclick="toggleAutoLog()">...</button><button onclick="showView('modules')">Modules</button></div></div><div class="sectionTitle">Key data</div><div id="keyCards" class="cards"></div><div class="note">Metric and imperial values are shown together where a useful conversion exists. Actual/target pairs share one card with a live delta. Pair-card colors use conservative tracking tolerances for diagnosis; they are not Mercedes fault-code thresholds.</div></section>
-<section id="live" class="view"><div class="sectionTitle">Live Data · <span id="liveModule">...</span></div><div class="note">Live data updates automatically when the ESP32 logger has an active ECU connection; no browser-side connection is needed.</div><div class="note">Tap any measurement to view its recent history. Tap a measurement to open a chart, then use Add metrics to overlay other values. Live samples are kept in this browser while the page remains open.</div><div id="trend" class="trendBox" style="display:none"><div class="heroRow"><div><div id="trendTitle" class="trendTitle">History</div><div id="trendSubtitle" class="sub"></div></div><button onclick="closeTrend()">Close</button></div><div class="actions"><button class="primary" onclick="toggleMultiPicker()">+ Add metrics</button><button onclick="exportMultiCSV()">Export CSV</button><button onclick="exportMultiSVG()">Export SVG</button><button onclick="clearMultiMetrics()">Reset chart</button></div>
+<section id="health" class="view"><div class="sectionTitle">ESP32 alerts and rules</div><div class="note">Numeric rules are off until you configure them. Thresholds are user settings, not verified factory fault limits. Missing measurements cannot establish vehicle health.</div><div id="healthRules" class="cards"></div><div class="actions"><button onclick="loadAlertEvents()">Recent persistent events</button></div><pre id="alertEvents">Event history has not been requested.</pre><div class="sectionTitle">Configure a rule</div><div class="actions"><select id="alertRule"><option>coolant</option><option>oilTemp</option><option>batteryLow</option><option>batteryHigh</option><option>railDeficit</option><option>boostError</option></select><input id="alertTrigger" type="number" placeholder="Trigger" step="any"><input id="alertClear" type="number" placeholder="Clear threshold" step="any"><input id="alertDebounce" type="number" value="10000" min="0" max="600000" aria-label="Persistence milliseconds"><select id="alertSeverity"><option value="0">Advisory</option><option value="1" selected>Warning</option><option value="2">Critical</option></select><button onclick="saveAlertRule(true)">Save & enable</button><button onclick="saveAlertRule(false)">Disable rule</button></div><div id="alertResult" role="status"></div></section><section id="live" class="view"><div class="sectionTitle">Live Data · <span id="liveModule">...</span></div><div class="note">Live data updates automatically when the ESP32 logger has an active ECU connection; no browser-side connection is needed.</div><div class="note">Tap any measurement to view its recent history. Tap a measurement to open a chart, then use Add metrics to overlay other values. Every chart reads recorded ESP32 microSD history. Live measurements above the chart are read directly from the ECU.</div><div id="trend" class="trendBox" style="display:none"><div class="heroRow"><div><div id="trendTitle" class="trendTitle">History</div><div id="trendSubtitle" class="sub"></div></div><button onclick="closeTrend()">Close</button></div><div class="actions"><button class="primary" onclick="toggleMultiPicker()">+ Add metrics</button><button onclick="exportMultiCSV()">Export CSV</button><button onclick="exportMultiSVG()">Export SVG</button><button onclick="clearMultiMetrics()">Reset chart</button></div>
 <div class="multiControls" style="margin-top:10px"><input id="multiSearch" type="search" placeholder="Find a measurement..." aria-label="Search chart measurements" oninput="renderMultiPicker()"><label><input id="multiPairTargets" type="checkbox" checked onchange="multiAutoTargets=this.checked;multiSelectionChanged()">Include target automatically</label></div>
 <div id="multiPicker" class="multiPicker" aria-label="Add or remove measurements"></div>
 <div class="actions" id="historyRanges">
-<button onclick="setTrendRange('live')">Live</button>
 <button onclick="setTrendRange('1h')">1 hour</button>
 <button onclick="setTrendRange('24h')">24 hours</button>
 <button onclick="setTrendRange('7d')">7 days</button>
 <button onclick="setTrendRange('30d')">30 days</button>
 <button onclick="setTrendRange('all')">All</button>
-</div><svg id="trendPlot" viewBox="0 0 780 280" role="img" aria-label="Recent measurement history"></svg><div id="trendLegend" class="note"></div><div class="note" id="trendFoot"></div><div class="note" id="historyStorage">Checking on-device storage…</div></div><div id="allCards" class="cards"></div><div class="sectionTitle">ECU diagnostic groups / raw responses</div><div class="note">Raw frames are preserved for every captured group. Unlabelled bytes are displayed without guessing units or physical meaning. Stop live polling before reading one group manually.</div><div id="liveGroupCatalog" class="moduleGrid"></div></section>
-<section id="faults" class="view"><div class="sectionTitle">Fault Codes · <span id="faultModule">...</span></div><div class="actions"><button id="absReadBtn" class="primary" onclick="readDtc()">Read fault codes</button></div><div id="absDtcNote" class="notice" style="display:none">ABS fault-code definitions are available below. The ECU rejected the standard 18 02 FF 00 read request (NRC 12). An Autel fault-screen capture is needed before enabling stored-fault reads. No fault codes have been read or cleared.</div><div id="absFaultLookup" class="module" style="display:none"><b>ABS code lookup (CBF catalog)</b><div class="note">Search a code or description; this is a reference, not a live fault list.</div><input id="absCode" placeholder="C1401 or wheel sensor" oninput="renderAbsFaultLookup()" style="width:100%;max-width:360px;padding:9px;background:var(--panel);border:1px solid var(--line);border-radius:8px;color:inherit;margin:8px 0"><div id="absDtcResult" style="max-height:270px;overflow:auto"></div></div><div id="faultText" class="faultBox">No fault-code read yet.</div><div class="note" style="margin-top:8px">Fault clearing and raw commands stay in Advanced so normal scanner use remains read-only.</div></section>
-<section id="tests" class="view"><div id="hzrFanPanel" style="display:none"><div class="sectionTitle">A/C Auxiliary Fan · HZRKL</div><div class="module"><div class="note">OBD pin 15 · module 0x50 · fan control is experimental. Use ignition ON, vehicle parked, and keep hands away from the fan.</div><div class="actions"><button class="primary" onclick="hzrStatus()">Read Fan Status</button><button onclick="hzrStart()">Run Fan (4 seconds)</button></div><pre id="hzrFanStatus" class="faultBox" style="margin-top:10px;min-height:50px">Read fan status to check command output.</pre><div id="hzrFanOutcome" class="note"></div></div></div><div id="cr2TestPanel"><div class="sectionTitle">CR2 Active Tests</div><div class="sectionTitle" style="font-size:14px">Live ECU feedback</div><div id="testFeedback" class="cards"></div><div class="note">These values are read back from the ECU while live polling is active. A positive test response means the ECU accepted the command; it does not by itself prove a lamp, fan, valve, or actuator physically moved.</div><div id="testOnlyEngine" class="notice" style="display:none">These controls require Engine / CR2 on OBD pin 7.</div><div class="moduleGrid"><div class="module"><h3>Output tests</h3><div class="actions"><button onclick="testCmd('epc_on')">EPC lamp ON</button><button onclick="testCmd('epc_off')">EPC lamp OFF</button><button onclick="testCmd('glow_lamp_on')">Glow lamp ON</button><button onclick="testCmd('glow_lamp_off')">Glow lamp OFF</button><button onclick="testCmd('heater_on')">Aux heater ON</button><button onclick="testCmd('heater_off')">Aux heater OFF</button><button onclick="testCmd('fan_on')">Fan ON</button><button onclick="testCmd('fan_off')">Fan OFF</button><button onclick="testCmd('ac_cut_on')">A/C cutoff ON</button><button onclick="testCmd('ac_cut_off')">A/C cutoff OFF</button><button onclick="testCmd('ac_can_on')">A/C CAN ON</button><button onclick="testCmd('ac_can_off')">A/C CAN OFF</button></div></div><div class="module"><h3>Actuator override</h3><div class="note">Set a percentage, send it, then release control back to the ECU.</div><div id="actuatorControls"></div></div><div class="module"><h3>Compression test</h3><div class="actions"><button class="primary" onclick="testCmd('compression_lrr_on')">Start · LRR active</button><button class="primary" onclick="testCmd('compression_lrr_off')">Start · LRR disabled</button><button onclick="testCmd('compression_stop')">Stop</button></div></div></div><div class="sectionTitle">Last test result</div><div id="testResult" class="faultBox">No test sent yet.</div><div id="testExplain" class="note" style="margin-top:8px">The ECU response confirms acceptance or rejection. A physical outcome requires an appropriate live sensor changing.</div></div></section><section id="modules" class="view"><div class="sectionTitle">All ECUs on the four wired K-lines</div><div class="note">Multiple diagnostic addresses share a physical OBD pin; select the ECU, not the cable. Entries are based on successful vehicle or Autel communication, not assumed scan addresses.</div><div id="moduleCatalog" class="moduleGrid"></div><div class="notice">Pin 7: engine; pin 9: ABS + shift lever; pin 11: transmission; pin 15: HVAC + instrument cluster. ABS uses KWFB and its detailed live transport remains under investigation. EWM has a confirmed fault/status summary but no validated continuous sensor map.</div></section>
+</div><svg id="trendPlot" viewBox="0 0 780 280" role="img" aria-label="Recent measurement history"></svg><div id="trendLegend" class="note"></div><div class="note" id="trendFoot"></div><div class="note" id="historyStorage">Checking on-device storage…</div></div><input id="liveSearch" type="search" placeholder="Search sensor name or ID" aria-label="Search sensors" oninput="render()"><div id="allCards" class="cards"></div><div class="sectionTitle">ECU diagnostic groups / raw responses</div><div class="note">Raw frames are preserved for every captured group. Unlabelled bytes are displayed without guessing units or physical meaning. Stop live polling before reading one group manually.</div><div id="liveGroupCatalog" class="moduleGrid"></div></section>
+<section id="faults" class="view"><div class="sectionTitle">Fault Codes · <span id="faultModule">...</span></div><div class="actions"><button id="absReadBtn" class="primary" onclick="readDtc()">Read fault codes</button></div><div id="absDtcNote" class="notice" style="display:none">ABS fault-code definitions are available below. The ECU rejected the standard 18 02 FF 00 read request (NRC 12). An Autel fault-screen capture is needed before enabling stored-fault reads. No fault codes have been read or cleared.</div><div id="absFaultLookup" class="module" style="display:none"><b>ABS code lookup (CBF catalog)</b><div class="note">Search a code or description; this is a reference, not a live fault list.</div><input id="absCode" placeholder="C1401 or wheel sensor" oninput="renderAbsFaultLookup()" style="width:100%;max-width:360px;padding:9px;background:var(--panel);border:1px solid var(--line);border-radius:8px;color:inherit;margin:8px 0"><div id="absDtcResult" style="max-height:270px;overflow:auto"></div></div><div id="dtcSnapshot"></div><button onclick="loadDtcEvents()">Saved DTC transitions</button><pre id="dtcEvents"></pre><div id="faultText" class="faultBox">No fault-code read yet.</div><div class="note" style="margin-top:8px">Fault clearing and raw commands stay in Advanced so normal scanner use remains read-only.</div></section>
+<section id="tests" class="view"><div id="testsMode" class="notice">Checking diagnostic mode…</div><div id="hzrFanPanel" style="display:none"><div class="sectionTitle">A/C Auxiliary Fan · HZRKL</div><div class="module"><div class="note">OBD pin 15 · module 0x50 · fan control is experimental. Use ignition ON, vehicle parked, and keep hands away from the fan.</div><div class="actions"><button class="primary" onclick="hzrStatus()">Read Fan Status</button><button onclick="hzrStart()">Run Fan (4 seconds)</button></div><pre id="hzrFanStatus" class="faultBox" style="margin-top:10px;min-height:50px">Read fan status to check command output.</pre><div id="hzrFanOutcome" class="note"></div></div></div><div id="cr2TestPanel"><div class="sectionTitle">CR2 Active Tests</div><div class="sectionTitle" style="font-size:14px">Live ECU feedback</div><div id="testFeedback" class="cards"></div><div class="note">These values are read back from the ECU while live polling is active. A positive test response means the ECU accepted the command; it does not by itself prove a lamp, fan, valve, or actuator physically moved.</div><div id="testOnlyEngine" class="notice" style="display:none">These controls require Engine / CR2 on OBD pin 7.</div><div class="moduleGrid"><div class="module"><h3>Output tests</h3><div class="actions"><button onclick="testCmd('epc_on')">EPC lamp ON</button><button onclick="testCmd('epc_off')">EPC lamp OFF</button><button onclick="testCmd('glow_lamp_on')">Glow lamp ON</button><button onclick="testCmd('glow_lamp_off')">Glow lamp OFF</button><button onclick="testCmd('heater_on')">Aux heater ON</button><button onclick="testCmd('heater_off')">Aux heater OFF</button><button onclick="testCmd('fan_on')">Fan ON</button><button onclick="testCmd('fan_off')">Fan OFF</button><button onclick="testCmd('ac_cut_on')">A/C cutoff ON</button><button onclick="testCmd('ac_cut_off')">A/C cutoff OFF</button><button onclick="testCmd('ac_can_on')">A/C CAN ON</button><button onclick="testCmd('ac_can_off')">A/C CAN OFF</button></div></div><div class="module"><h3>Actuator override</h3><div class="note">Set a percentage, send it, then release control back to the ECU.</div><div id="actuatorControls"></div></div><div class="module"><h3>Compression test</h3><div class="actions"><button class="primary" onclick="testCmd('compression_lrr_on')">Start · LRR active</button><button class="primary" onclick="testCmd('compression_lrr_off')">Start · LRR disabled</button><button onclick="testCmd('compression_stop')">Stop</button></div></div></div><div class="sectionTitle">Last test result</div><div id="testResult" class="faultBox">No test sent yet.</div><div id="testExplain" class="note" style="margin-top:8px">The ECU response confirms acceptance or rejection. A physical outcome requires an appropriate live sensor changing.</div></div></section><section id="modules" class="view"><div class="sectionTitle">All ECUs on the four wired K-lines</div><div class="note">Multiple diagnostic addresses share a physical OBD pin; select the ECU, not the cable. Entries are based on successful vehicle or Autel communication, not assumed scan addresses.</div><div id="moduleCatalog" class="moduleGrid"></div><div class="notice">Pin 7: engine; pin 9: ABS + shift lever; pin 11: transmission; pin 15: HVAC + instrument cluster. ABS uses KWFB and its detailed live transport remains under investigation. EWM has a confirmed fault/status summary but no validated continuous sensor map.</div></section>
 <section id="logs" class="view"><div class="sectionTitle">Diagnostic Activity Log</div><div class="note">Human-readable scanner events. Raw KWP traffic is still available in Advanced.</div><div class="logBtns"><button id="pauseLogBtn" onclick="toggleLog()">Pause</button><button onclick="copyLog()">Copy</button><button onclick="exportLog()">Export .txt</button><button onclick="clearActivityLog()">Clear</button></div><pre id="activityLog" class="faultBox" style="min-height:360px;max-height:65vh;overflow:auto">Loading...</pre></section><a class="footerLink" href="/advanced">Advanced tools, raw terminal, settings & firmware update →</a><div class="tiny" style="text-align:center;margin-top:8px">Active tests are only sent when you press a control.</div></div>
-<script>const absDtcCatalog=`C1000|ABS controller internal
+<script>
+/* T1N_SHARED_BEGIN */
+/* Shared by mobile, Pi and the embedded recovery page. No measurements persist here. */
+(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.T1N=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
+  'use strict';
+  const ranges=['1h','24h','7d','30d','all'];
+  let tail=Promise.resolve();
+  function request(path,options={}){
+    const work=async()=>{
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),options.timeoutMs||7000);
+      try{
+        const r=await fetch(path,{cache:'no-store',...options,signal:controller.signal});
+        const data=await r.json();
+        if(!r.ok||data.ok===false||data.error&&Array.isArray(data.points)){
+          const e=new Error(data.error||'HTTP '+r.status);e.code=data.code||'HTTP_ERROR';e.status=r.status;throw e;
+        }
+        return data;
+      }catch(e){if(e.name==='AbortError'){const t=new Error('Scanner request timed out');t.code='TIMEOUT';throw t;}throw e;}
+      finally{clearTimeout(timer);}
+    };
+    const result=tail.then(work,work);tail=result.catch(()=>{});return result;
+  }
+  function fresh(sensor,elapsedMs=0,maxAge=24000){
+    return !!sensor&&(sensor.valid===1||sensor.valid===true)&&!sensor.stale
+      &&Number.isFinite(Number(sensor.ageMs))&&Number(sensor.ageMs)>=0
+      &&Number(sensor.ageMs)+elapsedMs<=maxAge;
+  }
+  function aligned(a,b,maxSkewMs=3000){
+    return fresh(a)&&fresh(b)&&a.unit===b.unit&&Math.abs(Number(a.ageMs)-Number(b.ageMs))<=maxSkewMs;
+  }
+  function validateHistory(data){
+    if(!data||!Array.isArray(data.points))throw Error('Malformed SD history response');
+    if(data.points.length>350)throw Error('SD history page exceeds limit');
+    for(const p of data.points){
+      if(!['t','avg','min','max','count','tier'].every(k=>typeof p[k]==='number'&&Number.isFinite(p[k]))
+        ||p.t<1609459200||p.count<1||p.min>p.avg||p.avg>p.max||p.tier<0||p.tier>2)throw Error('Invalid SD history record');
+    }
+    return data;
+  }
+  async function history(module,id,range,maxPoints=400){
+    if(!ranges.includes(range)||!Number.isInteger(module)||module<0||module>5)throw Error('Invalid history selection');
+    const base='/api/history/data?'+new URLSearchParams({module,id,range});
+    let url=base,points=[],data;
+    do{
+      for(let attempt=0;;attempt++){
+        try{data=validateHistory(await request(url));break;}
+        catch(e){
+          if(!['HISTORY_PENDING','HISTORY_QUERY_BUSY','DIAGNOSTIC_BUSY'].includes(e.code)||attempt>=79)throw e;
+          await new Promise(resolve=>setTimeout(resolve,500));
+        }
+      }
+      points.push(...data.points);
+      if(!data.more||!data.next||points.length>=maxPoints)break;
+      url=base+'&'+new URLSearchParams(data.next);
+    }while(true);
+    return {...data,points:points.sort((a,b)=>a.t-b.t),limited:!!data.more};
+  }
+  function segments(points){
+    const result=[];
+    for(const p of points){
+      const group=result[result.length-1],prior=group&&group[group.length-1];
+      const gap=p.tier===2?129600:p.tier===1?1350:90;
+      if(!prior||p.tier!==prior.tier||p.t-prior.t>gap||p.t<prior.t)result.push([p]);else group.push(p);
+    }
+    return result;
+  }
+  function csv(series,moduleId,moduleLabel){
+    const quote=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+    const rows=[['Timestamp UTC','Module ID','Module','Sensor ID','Sensor label','Units','Average','Minimum','Maximum','Sample count','Tier']];
+    for(const s of series)for(const p of s.points)rows.push([new Date(p.t*1000).toISOString(),moduleId,moduleLabel,s.id,s.label,s.unit,p.avg,p.min,p.max,p.count,['recent','15m','daily'][p.tier]]);
+    return '\uFEFF'+rows.map(r=>r.map(quote).join(',')).join('\r\n')+'\r\n';
+  }
+  function status(scanner,monitor,storage,online){
+    return {scannerOnline:!!online,monitoringEnabled:monitor?.enabled===true,ecuConnected:!!online&&!!scanner?.connected,
+      historyAvailable:!!storage&&storage.storage==='microSD'&&storage.enabled===true,
+      storageHealthy:!!storage&&storage.enabled===true&&storage.storage==='microSD'&&!storage.error,
+      clockValid:!!monitor?.clock?.valid,ignitionQualified:monitor?.ignitionQualified===true};
+  }
+  return {request,fresh,aligned,history,validateHistory,segments,csv,status,ranges};
+});
+/* T1N_SHARED_END */
+const absDtcCatalog=`C1000|ABS controller internal
 C1010|Low battery voltage
 C1011|Valve relay or supply
 C1020|CAN initialization/communication
@@ -57,37 +141,16 @@ C1411|Retarder shutoff relay
 C1500|Incorrect tone wheel or tire size
 P0000|Retarder relay (CBF alias, unverified)`.trim().split('\n').map(x=>x.split('|'));
 function renderAbsFaultLookup(){const q=$('absCode').value.trim().toUpperCase(),matches=absDtcCatalog.filter(x=>x.join(' ').toUpperCase().includes(q));$('absDtcResult').innerHTML=matches.length?matches.map(x=>'<div style="padding:5px 0;border-bottom:1px solid var(--line)"><b>'+esc(x[0])+'</b> · '+esc(x[1])+'</div>').join(''):'No matching ABS code';}
-let S={moduleId:0,connected:0,polling:0},modulesCatalog=[],lastGroupUpdate=0,lastGroupModule=-1,items=[],connecting=false,logPaused=false,history={},seenSamples={},selectedTrend=null,historyModule=-1,multiPicked=[],multiAutoTargets=true,multiStored={},multiFetchedAt=0,multiFetchToken=0,multiPickerSignature="",trendRange="live",historyStorageChecked=0,A={enabled:false,ignitionSignal:"UNKNOWN",modules:[]},lastAutoCheck=0;const $=x=>document.getElementById(x);document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>showView(b.dataset.v));function showView(v){document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id===v));document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('on',x.dataset.v===v));}function esc(s){return String(s??'--').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}function fmt(v,d){return Number(v).toFixed(d)}function imperial(x){if(!x||!x.valid)return'';let v=Number(x.value),u=x.unit||'';if(!Number.isFinite(v))return'';if(u==='°C')return fmt(v*9/5+32,1)+' °F';if(u==='km/h')return fmt(v*0.621371,1)+' mph';if(u==='km')return fmt(v*0.621371,0)+' mi';if(u==='bar')return fmt(v*14.5037738,x.id&&x.id.includes('lowFuel')?1:0)+' psi';if(u==='hPa'){if(x.id==='atmos')return fmt(v*0.0295299831,2)+' inHg';return fmt(v*0.0145037738,1)+' psi'}if(u==='mbar')return fmt(v*0.0145037738,1)+' psi';if(u==='Nm')return fmt(v*0.737562149,0)+' lb-ft';if(u==='mm')return fmt(v*0.0393700787,2)+' in';if(u==='kg/h')return fmt(v*2.20462262,1)+' lb/hr';if(u==='g/s')return fmt(v*7.93664144,1)+' lb/hr';if(u==='mg/stroke')return fmt(v*0.0154323584,3)+' gr/stroke';if(u==='mm³/stroke')return fmt(v*0.0000610237441,6)+' in³/stroke';return''}function primaryValue(x,cls='value'){let imp=imperial(x);return `<div class="${cls}">${esc(x&&x.valid?x.value:'--')}<span class="unit">${esc(x&&x.valid?x.unit:'')}</span></div>${imp?`<div class="imperial">${esc(imp)}</div>`:''}`}function card(x){let st=x.state||'neutral';return `<div class="metric ${x.stale?'stale':''} ${esc(st)}"><div class="label">${esc(x.label)}</div>${primaryValue(x)}<div class="expected">${esc(x.expected||'')}</div></div>`}const pairSpecs={lowFuel:{target:'lowFuelMin',title:'Low-side fuel pressure',targetLabel:'ECU MINIMUM',mode:'min',warn:0.15},boost:{target:'boostTarget',title:'Boost / MAP',mode:'delta',warn:200,bad:400,wp:.10,bp:.20},rail:{target:'railTarget',title:'Rail pressure',mode:'delta',warn:50,bad:100,wp:.10,bp:.20},gear:{target:'targetGear',title:'Gear',mode:'gear'},converterSlip:{target:'converterTargetSlip',title:'Converter slip',mode:'delta',warn:100,bad:250,wp:.15,bp:.30},shiftCurrentActual:{target:'shiftCurrentTarget',title:'Shift regulator current',mode:'delta',warn:75,bad:150,wp:.10,bp:.20},modCurrentActual:{target:'modCurrentTarget',title:'Modulating regulator current',mode:'delta',warn:75,bad:150,wp:.10,bp:.20}};let byId={};const pairedTargets=new Set(Object.values(pairSpecs).map(s=>s.target));function impDelta(unit,v,id){if(unit==='bar')return fmt(v*14.5037738,1)+' psi';if(unit==='hPa'||unit==='mbar')return fmt(v*0.0145037738,1)+' psi';if(unit==='Nm')return fmt(v*0.737562149,0)+' lb-ft';if(unit==='km/h')return fmt(v*0.621371,1)+' mph';return''}function pairEval(a,t,s){if(!a||!t||!a.valid||!t.valid||a.stale||t.stale)return{state:'neutral',text:'Waiting for fresh comparison data'};if(s.mode==='gear'){let shifting=(byId.upshift&&byId.upshift.value==='Active')||(byId.downshift&&byId.downshift.value==='Active');if(a.value===t.value)return{state:'ok',text:'Actual matches target'};return shifting?{state:'neutral',text:'Target differs while a shift is in progress'}:{state:'warn',text:'Actual gear differs from target'}}let av=Number(a.value),tv=Number(t.value);if(!Number.isFinite(av)||!Number.isFinite(tv))return{state:'neutral',text:'Comparison unavailable'};let d=av-tv;if(s.mode==='min'){let imp=impDelta(a.unit,d,a.id);if(d<0)return{state:'bad',text:`Below ECU minimum by ${fmt(Math.abs(d),3)} ${a.unit}${imp?' / '+impDelta(a.unit,Math.abs(d),a.id):''}`};if(d<s.warn)return{state:'warn',text:`Only ${fmt(d,3)} ${a.unit}${imp?' / '+imp:''} above ECU minimum`};return{state:'ok',text:`Margin +${fmt(d,3)} ${a.unit}${imp?' / +'+imp:''}`}}let ad=Math.abs(d),wt=Math.max(s.warn||0,Math.abs(tv)*(s.wp||0)),bt=Math.max(s.bad||0,Math.abs(tv)*(s.bp||0)),pct=Math.abs(tv)>0.0001?ad/Math.abs(tv)*100:null,imp=impDelta(a.unit,d,a.id),sign=d>=0?'+':'';let txt=`Δ ${sign}${fmt(d,Math.abs(d)<10?2:0)} ${a.unit}${imp?' / '+(d>=0?'+':'')+imp:''}${pct!==null?' · '+fmt(pct,1)+'%':''}`;return{state:ad>bt?'bad':ad>wt?'warn':'ok',text:txt}}function pairCard(a,t,s){let ev=pairEval(a,t,s),stale=(a&&a.stale)||(t&&t.stale);return `<div class="metric pairMetric ${stale?'stale':''} ${ev.state}"><div class="label">${esc(s.title)}</div><div class="pairGrid"><div class="pairSide"><div class="pairTag">ACTUAL</div>${primaryValue(a,'pairValue')}</div><div class="pairSide"><div class="pairTag">${esc(s.targetLabel||'TARGET')}</div>${primaryValue(t,'pairValue')}</div></div><div class="compare">${esc(ev.text)}</div></div>`}function renderItems(xs){return xs.filter(x=>!pairedTargets.has(x.id)).map(x=>{let s=pairSpecs[x.id],t=s?byId[s.target]:null;return `<div data-metric-id="${esc(x.id)}">${s&&t?pairCard(x,t,s):card(x)}</div>`}).join('')}function keyItems(){let ids=S.moduleId===0?['rpm','speed','coolant','battery','lowFuel','boost','rail']:S.moduleId===2?['temp','gear','converterSlip','shiftCurrentActual','modCurrentActual','speed','battery']:S.moduleId===1?['wheelFL','wheelFR','wheelRL','wheelRR','voltage','brakeLamp']:S.moduleId===5?['kiFuel','kiOutside','kiDimmer','kiSpeed','kiSender']:S.moduleId===3?['g2164_b0','g2164_b1','g2164_b2']:[];return ids.map(id=>byId[id]).filter(Boolean)}function rememberItems(){
-  if(historyModule!==S.moduleId){
-    history={};seenSamples={};selectedTrend=null;historyModule=S.moduleId;
-    multiPicked=[];trendRange="live";multiStored={};multiFetchedAt=0;multiFetchToken++;multiPickerSignature="";
-    $('trend').style.display='none';
-  }
-  const now=Date.now();
-  for(const x of items){
-    if(!x.valid||x.stale)continue;
-    const value=Number(String(x.value??'').trim());
-    const sample=Number(x.sampleMs||0);
-    if(!Number.isFinite(value)||!sample||seenSamples[x.id]===sample)continue;
-    seenSamples[x.id]=sample;
-    const age=Math.max(0,Math.min(30000,Number(x.ageMs)||0));
-    let time=now-age;
-    let points=history[x.id]||(history[x.id]=[]);
-    if(points.length&&time<=points[points.length-1][0])time=points[points.length-1][0]+1;
-    points.push([time,value]);
-    while(points.length>700)points.shift();
-  }
-  // Draw after render() updates byId so labels and target pairs are current.
-}
+let S={moduleId:0,connected:0,polling:0},modulesCatalog=[],lastGroupUpdate=0,lastGroupModule=-1,items=[],connecting=false,logPaused=false,selectedTrend=null,historyModule=-1,multiPicked=[],multiAutoTargets=true,multiStored={},multiFetchedAt=0,multiFetchToken=0,multiPickerSignature="",historyLoadError='',historyLoading=false,historyBusy=false,historyLimited=false,chartModule=0,chartModuleName='',trendSensors={},refreshBusy=false,trendRange="1h",historyStorageChecked=0,A={enabled:null,ignitionSignal:"UNKNOWN",modules:[]},lastAutoCheck=0;const $=x=>document.getElementById(x);document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>showView(b.dataset.v));function showView(v){document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id===v));document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('on',x.dataset.v===v));}function esc(s){return String(s??'--').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}function fmt(v,d){return Number(v).toFixed(d)}function imperial(x){if(!x||!x.valid)return'';let v=Number(x.value),u=x.unit||'';if(!Number.isFinite(v))return'';if(u==='°C')return fmt(v*9/5+32,1)+' °F';if(u==='km/h')return fmt(v*0.621371,1)+' mph';if(u==='km')return fmt(v*0.621371,0)+' mi';if(u==='bar')return fmt(v*14.5037738,x.id&&x.id.includes('lowFuel')?1:0)+' psi';if(u==='hPa'){if(x.id==='atmos')return fmt(v*0.0295299831,2)+' inHg';return fmt(v*0.0145037738,1)+' psi'}if(u==='mbar')return fmt(v*0.0145037738,1)+' psi';if(u==='Nm')return fmt(v*0.737562149,0)+' lb-ft';if(u==='mm')return fmt(v*0.0393700787,2)+' in';if(u==='kg/h')return fmt(v*2.20462262,1)+' lb/hr';if(u==='g/s')return fmt(v*7.93664144,1)+' lb/hr';if(u==='mg/stroke')return fmt(v*0.0154323584,3)+' gr/stroke';if(u==='mm³/stroke')return fmt(v*0.0000610237441,6)+' in³/stroke';return''}function primaryValue(x,cls='value'){if(x?.stale)x={...x,valid:0};let imp=imperial(x);return `<div class="${cls}">${esc(x&&x.valid?x.value:'--')}<span class="unit">${esc(x&&x.valid?x.unit:'')}</span></div>${imp?`<div class="imperial">${esc(imp)}</div>`:''}`}function card(x){let st=x.state||'neutral';return `<div class="metric ${x.stale?'stale':''} ${esc(st)}"><div class="label">${esc(x.label)}</div>${primaryValue(x)}<div class="expected">${esc(x.expected||'')}</div></div>`}const pairSpecs={lowFuel:{target:'lowFuelMin',title:'Low-side fuel pressure',targetLabel:'ECU MINIMUM',mode:'min',warn:0.15},boost:{target:'boostTarget',title:'Boost / MAP',mode:'delta',warn:200,bad:400,wp:.10,bp:.20},rail:{target:'railTarget',title:'Rail pressure',mode:'delta',warn:50,bad:100,wp:.10,bp:.20},gear:{target:'targetGear',title:'Gear',mode:'gear'},converterSlip:{target:'converterTargetSlip',title:'Converter slip',mode:'delta',warn:100,bad:250,wp:.15,bp:.30},shiftCurrentActual:{target:'shiftCurrentTarget',title:'Shift regulator current',mode:'delta',warn:75,bad:150,wp:.10,bp:.20},modCurrentActual:{target:'modCurrentTarget',title:'Modulating regulator current',mode:'delta',warn:75,bad:150,wp:.10,bp:.20}};let byId={};const pairedTargets=new Set(Object.values(pairSpecs).map(s=>s.target));function impDelta(unit,v,id){if(unit==='bar')return fmt(v*14.5037738,1)+' psi';if(unit==='hPa'||unit==='mbar')return fmt(v*0.0145037738,1)+' psi';if(unit==='Nm')return fmt(v*0.737562149,0)+' lb-ft';if(unit==='km/h')return fmt(v*0.621371,1)+' mph';return''}function pairEval(a,t,s){if(!T1N.aligned(a,t))return{state:'neutral',text:'Waiting for fresh comparison data'};if(s.mode==='gear'){let shifting=(byId.upshift&&byId.upshift.value==='Active')||(byId.downshift&&byId.downshift.value==='Active');if(a.value===t.value)return{state:'ok',text:'Actual matches target'};return shifting?{state:'neutral',text:'Target differs while a shift is in progress'}:{state:'warn',text:'Actual gear differs from target'}}let av=Number(a.value),tv=Number(t.value);if(!Number.isFinite(av)||!Number.isFinite(tv))return{state:'neutral',text:'Comparison unavailable'};let d=av-tv;if(s.mode==='min'){let imp=impDelta(a.unit,d,a.id);if(d<0)return{state:'bad',text:`Below ECU minimum by ${fmt(Math.abs(d),3)} ${a.unit}${imp?' / '+impDelta(a.unit,Math.abs(d),a.id):''}`};if(d<s.warn)return{state:'warn',text:`Only ${fmt(d,3)} ${a.unit}${imp?' / '+imp:''} above ECU minimum`};return{state:'ok',text:`Margin +${fmt(d,3)} ${a.unit}${imp?' / +'+imp:''}`}}let ad=Math.abs(d),wt=Math.max(s.warn||0,Math.abs(tv)*(s.wp||0)),bt=Math.max(s.bad||0,Math.abs(tv)*(s.bp||0)),pct=Math.abs(tv)>0.0001?ad/Math.abs(tv)*100:null,imp=impDelta(a.unit,d,a.id),sign=d>=0?'+':'';let txt=`Δ ${sign}${fmt(d,Math.abs(d)<10?2:0)} ${a.unit}${imp?' / '+(d>=0?'+':'')+imp:''}${pct!==null?' · '+fmt(pct,1)+'%':''}`;return{state:ad>bt?'bad':ad>wt?'warn':'ok',text:txt}}function pairCard(a,t,s){let ev=pairEval(a,t,s),stale=(a&&a.stale)||(t&&t.stale);return `<div class="metric pairMetric ${stale?'stale':''} ${ev.state}"><div class="label">${esc(s.title)}</div><div class="pairGrid"><div class="pairSide"><div class="pairTag">ACTUAL</div>${primaryValue(a,'pairValue')}</div><div class="pairSide"><div class="pairTag">${esc(s.targetLabel||'TARGET')}</div>${primaryValue(t,'pairValue')}</div></div><div class="compare">${esc(ev.text)}</div></div>`}function renderItems(xs){return xs.filter(x=>!pairedTargets.has(x.id)).map(x=>{let s=pairSpecs[x.id],t=s?byId[s.target]:null;return `<div data-metric-id="${esc(x.id)}">${s&&t?pairCard(x,t,s):card(x)}</div>`}).join('')}function keyItems(){let ids=S.moduleId===0?['rpm','speed','coolant','battery','lowFuel','boost','rail']:S.moduleId===2?['temp','gear','converterSlip','shiftCurrentActual','modCurrentActual','speed','battery']:S.moduleId===1?['wheelFL','wheelFR','wheelRL','wheelRR','voltage','brakeLamp']:S.moduleId===5?['kiFuel','kiOutside','kiDimmer','kiSpeed','kiSender']:S.moduleId===3?['g2164_b0','g2164_b1','g2164_b2']:[];return ids.map(id=>byId[id]).filter(Boolean)}function rememberItems(){historyModule=S.moduleId;}
 
 function closeTrend(){selectedTrend=null;multiPicked=[];multiStored={};multiFetchToken++;$('trend').style.display='none';$('multiPicker').classList.remove('open');}
 async function checkHistoryStorage(){
   historyStorageChecked=Date.now();
   try{
-    const d=await(await fetch('/api/history/status',{cache:'no-store'})).json();
+    const d=await T1N.request('/api/history/status');
     const total=Math.round((d.capacityBytes||0)/1024),used=Math.round((d.usedBytes||0)/1024);
-    $('historyStorage').textContent=d.error?'Flash history: '+d.error+' · browser live data remains available':
-      'ESP32 history: '+used+'/'+total+' KiB · '+(d.timeReady?'clock synchronized':'waiting for time');
+    $('historyStorage').textContent=d.storage!=='microSD'?'SD card history unavailable (not using internal flash) · '+(d.error||'check SD card'):(d.error?'Stored history unavailable: '+d.error:
+      'Stored history ('+d.storage+'): '+used+'/'+total+' KiB · '+(d.timeReady?'clock synchronized':'waiting for time'));
   }catch(e){$('historyStorage').textContent='Could not check ESP32 history';}
 }
 async function syncHistoryClock(){
@@ -102,37 +165,38 @@ function updateTrendButtons(){
 function setTrendRange(range){
   trendRange=range;multiStored={};multiFetchedAt=0;multiFetchToken++;
   updateTrendButtons();drawTrend();
-  if(range!=='live')loadMultiHistory();
+  loadMultiHistory();
 }
 function showTrend(id){
   const x=byId[id];
   if(!x)return;
+  chartModule=Number(S.moduleId);chartModuleName=S.module;trendSensors={...byId};
   selectedTrend=id;multiPicked=[id];multiStored={};multiFetchToken++;
   $('multiPicker').classList.remove('open');$('multiSearch').value='';
   $('trend').style.display='block';multiPickerSignature='';
-  renderMultiPicker();checkHistoryStorage();setTrendRange('live');
-  $('trend').scrollIntoView({behavior:'smooth',block:'nearest'});
+  renderMultiPicker();checkHistoryStorage();setTrendRange('1h');
+  $('trend').scrollIntoView({block:'start'});
 }
 const multiColors=['#51a7ff','#ffb74d','#56d6ad','#ce98ff','#ff6d8d','#ecdd7f','#71c4e3','#c0ccd8'];
 const metricNumeric=x=>x&&(x.unit||x.valid&&String(x.value??'').trim()!==''&&Number.isFinite(Number(x.value)));
-function multiAvailable(){return items.filter(metricNumeric);}
+function multiAvailable(){return Object.values(trendSensors).filter(metricNumeric);}
 function multiActiveIds(){
   const ids=[];
   for(const id of multiPicked){
-    if(byId[id]&&!ids.includes(id))ids.push(id);
+    if(trendSensors[id]&&!ids.includes(id))ids.push(id);
     const target=pairSpecs[id]?.target;
-    if(multiAutoTargets&&target&&byId[target]&&!ids.includes(target))ids.push(target);
+    if(multiAutoTargets&&target&&trendSensors[target]&&!ids.includes(target))ids.push(target);
   }
   return ids;
 }
-function multiName(id){return byId[id]?.label||id;}
+function multiName(id){return trendSensors[id]?.label||id;}
 function toggleMultiPicker(){const picker=$('multiPicker');picker.classList.toggle('open');renderMultiPicker();}
 function clearMultiMetrics(){
   multiPicked=selectedTrend?[selectedTrend]:[];
   multiSelectionChanged();
 }
 function renderMultiPickerIfNeeded(){
-  const signature=S.moduleId+':'+items.map(x=>x.id+':'+x.unit).join(',');
+  const signature=chartModule+':'+Object.values(trendSensors).map(x=>x.id+':'+x.unit).join(',');
   if(signature!==multiPickerSignature){multiPickerSignature=signature;renderMultiPicker();}
 }
 function renderMultiPicker(){
@@ -168,39 +232,41 @@ function multiSelectionChanged(){
   }
   multiStored={};multiFetchedAt=0;multiFetchToken++;
   renderMultiPicker();drawTrend();
-  if(trendRange!=='live')loadMultiHistory();
+  loadMultiHistory();
 }
-function multiBrowserPoints(id){
-  const sec={'1h':3600,'24h':86400,'7d':604800,'30d':2592000};
-  const cutoff=trendRange==='live'?-Infinity:Date.now()/1000-(sec[trendRange]??Infinity);
-  return (history[id]||[]).filter(p=>p[0]/1000>=cutoff)
-    .map(p=>({t:p[0]/1000,avg:p[1],min:p[1],max:p[1],source:'browser'}));
-}
+// Browser-local points are deliberately not used for history; all charts read
+// the same persisted ESP32 logs regardless of which browser opens the page.
 function multiSeries(id){
-  if(trendRange==='live')return multiBrowserPoints(id);
-  if(multiStored[id]?.length)return multiStored[id]
+  return (multiStored[id]||[])
     .filter(p=>Number.isFinite(Number(p.t))&&Number.isFinite(Number(p.avg)))
-    .map(p=>({...p,source:'flash'}));
-  return multiBrowserPoints(id);
+    .map(p=>({...p,source:'microSD'}));
 }
 async function loadMultiHistory(){
-  if(!selectedTrend||trendRange==='live')return;
-  const ids=multiActiveIds(),mod=S.moduleId,range=trendRange,token=++multiFetchToken;
-  multiFetchedAt=Date.now();
-  for(const id of ids){
-    if(token!==multiFetchToken||S.moduleId!==mod||trendRange!==range)return;
-    try{
-      const r=await fetch('/api/history/data?module='+mod+'&id='+encodeURIComponent(id)+'&range='+range,{cache:'no-store'});
-      if(!r.ok)throw Error('HTTP '+r.status);
-      const d=await r.json();
-      if(token!==multiFetchToken||S.moduleId!==mod||trendRange!==range)return;
-      multiStored[id]=(d.points||[]).sort((a,b)=>Number(a.t)-Number(b.t));
-      drawTrend();
-    }catch(e){if(token!==multiFetchToken)return;multiStored[id]=[];}
+  if(!selectedTrend||historyBusy)return;
+  historyBusy=true;historyLoading=true;historyLimited=false;
+  const ids=multiActiveIds(),mod=chartModule,range=trendRange,token=++multiFetchToken;
+  historyLoadError='';multiStored={};multiFetchedAt=Date.now();drawTrend();
+  try{
+    for(const id of ids){
+      if(token!==multiFetchToken)return;
+      try{
+        const d=await T1N.history(mod,id,range);
+        if(token!==multiFetchToken)return;
+        multiStored[id]=d.points;historyLimited=historyLimited||d.limited;
+        if(d.corruptRecordsSkipped)historyLoadError='Some corrupted SD records were skipped';
+      }catch(e){
+        if(token!==multiFetchToken)return;
+        historyLoadError='Stored history unavailable for '+multiName(id)+': '+e.message;
+      }
+    }
+  }finally{
+    historyBusy=false;historyLoading=false;
+    if(token===multiFetchToken)drawTrend();
+    else if(selectedTrend)loadMultiHistory();
   }
 }
 function multiData(){
-  return multiActiveIds().map((id,index)=>({id,label:multiName(id),unit:byId[id]?.unit||'',
+  return multiActiveIds().map((id,index)=>({id,label:multiName(id),unit:trendSensors[id]?.unit||'',
     color:multiColors[index%multiColors.length],points:multiSeries(id),
     target:multiAutoTargets&&Object.values(pairSpecs).some(x=>x.target===id)&&!multiPicked.includes(id)}));
 }
@@ -216,10 +282,7 @@ function drawTrend(){
   const series=multiData();
   const svg=$('trendPlot'),legend=$('trendLegend'),foot=$('trendFoot');
   $('trendTitle').textContent=series.length===1?series[0].label:'Measurement history · '+series.length+' lines';
-  $('trendSubtitle').textContent=(trendRange==='live'?'Live':'Saved / browser')+' · '+series.map(s=>{
-    const v=byId[s.id];
-    return s.label+': '+(v?.valid?v.value+' '+(v.unit||''):'--');
-  }).join('  |  ');
+  $('trendSubtitle').textContent=chartModuleName+' · recorded '+trendRange+' · source timestamps in UTC';
   legend.innerHTML=series.map(s=>'<span style="display:inline-flex;align-items:center;gap:5px"><b style="color:'+s.color+'">●</b>'+esc(s.label)+(s.target?' (target)':'')+' ('+esc(s.unit)+')</span>').join(' ');
   const valid=[];
   for(const s of series)for(const p of s.points){
@@ -227,8 +290,8 @@ function drawTrend(){
     if(Number.isFinite(t)&&Number.isFinite(v))valid.push({t,v,id:s.id});
   }
   if(!valid.length){
-    svg.innerHTML='<text x="190" y="120" fill="#9fb4cb">Waiting for selected live readings…</text>';
-    foot.textContent='Select a measurement and enable live polling to collect samples.';
+    svg.innerHTML='<text x="190" y="120" fill="#9fb4cb">'+esc(historyLoadError||(historyLoading?'Loading saved SD readings…':'No saved SD readings for this interval'))+'</text>';
+    foot.textContent=historyLoadError||'The chart uses only stored SD history. Choose a longer period or wait for new logged readings.';
     return;
   }
   const scales={},units=[];
@@ -243,7 +306,10 @@ function drawTrend(){
       k.max=Math.max(k.max,Number.isFinite(hi)?hi:value,value);
     }
   }
-  const X0=176,X1=762,Y0=43,Y1=230;
+  const compact=svg.clientWidth<560;
+  svg.setAttribute('viewBox',compact?'0 0 420 280':'0 0 780 280');
+  const X0=compact?30:176,X1=compact?410:762,Y0=43,Y1=230;
+  if(compact)legend.innerHTML+='<div>'+units.map(u=>esc(u)+': '+axisFormat(scales[u].min)+'–'+axisFormat(scales[u].max)).join(' · ')+'</div>';
   const minTime=Math.min(...valid.map(p=>p.t)),maxTime=Math.max(...valid.map(p=>p.t));
   const x=t=>maxTime===minTime?(X0+X1)/2:X0+(X1-X0)*(t-minTime)/(maxTime-minTime);
   const y=(v,k)=>{
@@ -255,8 +321,8 @@ function drawTrend(){
     const yy=Y0+(Y1-Y0)*i/4;
     content+='<line x1="'+X0+'" y1="'+yy.toFixed(1)+'" x2="'+X1+'" y2="'+yy.toFixed(1)+'" stroke="#30455b" stroke-dasharray="3 5"/>';
   }
-  content+='<text x="10" y="25" fill="#9db2cc" font-size="12">Unit · MIN – MAX</text>';
-  for(let i=0;i<units.length;i++){
+  if(!compact)content+='<text x="10" y="25" fill="#9db2cc" font-size="12">Unit · MIN – MAX</text>';
+  for(let i=0;!compact&&i<units.length;i++){
     const unit=units[i],s=scales[unit],yy=47+i*23;
     content+='<circle cx="13" cy="'+(yy+5)+'" r="4" fill="'+s.color+'"/>'+
       '<text x="22" y="'+(yy+9)+'" fill="'+s.color+'" font-size="12">'+esc(unit)+'</text>'+
@@ -268,21 +334,23 @@ function drawTrend(){
     if(!scales[unit])continue;
     const pts=s.points.filter(p=>Number.isFinite(Number(p.t))&&Number.isFinite(Number(p.avg)));
     if(!pts.length)continue;
-    const coords=pts.map(p=>x(Number(p.t)).toFixed(1)+','+y(Number(p.avg),unit).toFixed(1)).join(' ');
-    content+='<polyline points="'+coords+'" fill="none" stroke="'+s.color+'" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"'+(s.target?' stroke-dasharray="7 4"':'')+'/>';
-    if(pts.length<=45)for(const p of pts){
+    for(const segment of T1N.segments(pts)){
+      const coords=segment.map(p=>x(p.t).toFixed(1)+','+y(p.avg,unit).toFixed(1)).join(' ');
+      content+='<polyline points="'+coords+'" fill="none" stroke="'+s.color+'" stroke-width="2.6"'+(s.target?' stroke-dasharray="7 4"':'')+'/>';
+    }
+    for(const p of pts)if(p.max>p.min)content+='<line x1="'+x(p.t)+'" x2="'+x(p.t)+'" y1="'+y(p.min,unit)+'" y2="'+y(p.max,unit)+'" stroke="'+s.color+'" stroke-opacity=".45" stroke-width="4"/>';
+
+    for(const p of pts){
       content+='<circle cx="'+x(Number(p.t)).toFixed(1)+'" cy="'+y(Number(p.avg),unit).toFixed(1)+'" r="2.6" fill="'+s.color+'"/>';
     }
   }
-  const fmtTime=t=>esc(new Date(t*1000).toLocaleString());
+  const fmtTime=t=>{const iso=new Date(t*1000).toISOString();return esc((trendRange==='1h'?iso.slice(11,19):iso.slice(5,16).replace('T',' '))+' UTC')};
   content+='<text x="'+X0+'" y="249" fill="#a6bbd2" font-size="11">'+fmtTime(minTime)+'</text>'+
     '<text x="'+X1+'" y="249" text-anchor="end" fill="#a6bbd2" font-size="11">'+fmtTime(maxTime)+'</text>';
   content+='<text x="'+X0+'" y="273" fill="#839ab6" font-size="11">Each unit uses its exact recorded low/high as its vertical bounds</text>';
   svg.innerHTML=content;
-  const flash=series.some(s=>s.points.some(p=>p.source==='flash'));
-  foot.textContent=series.length+' lines · '+valid.length+' observations · '+
-    (flash?'ESP32 stored history (15-minute ranges may be averages)':'browser live samples')+
-    (units.length>1?' · different units have independent vertical scales':'');
+  foot.textContent=historyLoadError || (series.length+' lines · '+valid.length+' saved observations · microSD · changed values ≥10s; unchanged heartbeat 30min'+(historyLimited?' · bounded view; more older records available':'')+
+    (units.length>1?' · different units have independent vertical scales':''));
 }
 function multiRows(){
   const rows=[];
@@ -290,7 +358,7 @@ function multiRows(){
     if(!Number.isFinite(Number(p.t))||!Number.isFinite(Number(p.avg)))continue;
     rows.push({timestamp:new Date(Number(p.t)*1000).toISOString(),id:s.id,label:s.label,unit:s.unit,
       value:Number(p.avg),minimum:p.min==null?'':Number(p.min),maximum:p.max==null?'':Number(p.max),
-      source:p.source||'browser'});
+      source:'microSD'});
   }
   return rows.sort((a,b)=>a.timestamp.localeCompare(b.timestamp)||a.id.localeCompare(b.id));
 }
@@ -300,16 +368,12 @@ function multiDownload(name,body,mime){
   setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
 function multiFilename(ext){
-  return 't1n_'+(S.module||'module').replace(/[^a-z0-9]+/gi,'_').toLowerCase()+
+  return 't1n_'+(chartModuleName||'module').replace(/[^a-z0-9]+/gi,'_').toLowerCase()+
     '_chart_'+trendRange+'_'+new Date().toISOString().replace(/[:.]/g,'-')+'.'+ext;
 }
 function exportMultiCSV(){
-  const rows=multiRows();
-  if(!rows.length){alert('No readings in this chart range to export.');return;}
-  const quote=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-  const csv=[['Timestamp UTC','Module','Metric ID','Metric','Unit','Value (avg if stored)','Minimum','Maximum','Source'].map(quote).join(',')];
-  for(const p of rows)csv.push([p.timestamp,S.module,p.id,p.label,p.unit,p.value,p.minimum,p.maximum,p.source].map(quote).join(','));
-  multiDownload(multiFilename('csv'),'\uFEFF'+csv.join('\r\n')+'\r\n','text/csv;charset=utf-8');
+  if(!multiRows().length){alert('No server records available to export.');return;}
+  multiDownload(multiFilename('csv'),T1N.csv(multiData(),chartModule,chartModuleName),'text/csv;charset=utf-8');
 }
 function exportMultiSVG(){
   if(!multiRows().length){alert('No plotted readings to export.');return;}
@@ -317,7 +381,7 @@ function exportMultiSVG(){
   svg.setAttribute('xmlns','http://www.w3.org/2000/svg');
   svg.setAttribute('width','1170');svg.setAttribute('height','420');
   const title=document.createElementNS('http://www.w3.org/2000/svg','title');
-  title.textContent='T1N '+(S.module||'')+' · '+trendRange+' · '+multiData().map(s=>s.label).join(' | ');
+  title.textContent='T1N '+(chartModuleName||'')+' · '+trendRange+' · '+multiData().map(s=>s.label).join(' | ');
   svg.insertBefore(title,svg.firstChild);
   multiDownload(multiFilename('svg'),new XMLSerializer().serializeToString(svg),'image/svg+xml;charset=utf-8');
 }
@@ -325,6 +389,8 @@ document.addEventListener('click',e=>{let box=e.target.closest('[data-metric-id]
 function renderAutoState(){
  const status=$('autoInfo'),button=$('autoBtn');
  if(!status||!button)return;
+ if(A.enabled!==true&&A.enabled!==false){status.textContent="Automatic monitor status unavailable";button.disabled=true;button.textContent="Status unknown";return;}
+ button.disabled=false;
  const a=!!A.enabled;
  status.textContent=a?(S.connected?'Automatic logger · Connected to '+(S.module||'ECU'):'Automatic logger · Waiting for ECU'):'Automatic logger · Paused';
  button.textContent=a?'Pause auto logging':'Enable auto logging';
@@ -332,6 +398,7 @@ function renderAutoState(){
  if(!S.connected&&a){$('linkState').textContent='Automatic standby';$('dot').className='statusDot wait';}
 }
 async function toggleAutoLog(){
+ if(A.enabled!==true&&A.enabled!==false)return;
  const enable=!A.enabled;
  try{
   const r=await fetch('/api/monitor/enable',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({enabled:enable?'1':'0'})});
@@ -339,7 +406,48 @@ async function toggleAutoLog(){
   A=await r.json();await refresh();
  }catch(e){alert('Logger setting failed: '+e.message)}
 }
-function render(){byId=Object.fromEntries(items.map(x=>[x.id,x]));$('keyCards').innerHTML=renderItems(keyItems());$('allCards').innerHTML=renderItems(items);$('moduleName').textContent=S.module;$('liveModule').textContent=S.module;$('faultModule').textContent=S.module;$('addr').textContent=S.address;$('pin').textContent=S.obdPin;$('relay').textContent=S.relay?('K'+S.relay):'--';$('relayGpio').textContent=S.relayGpio===255?'--':S.relayGpio;let showVariant=(S.moduleId===2||S.moduleId===1)&&S.variant;$('variantLine').style.display=showVariant?'block':'none';$('variantId').textContent=showVariant?S.variant:'--';$('fw').textContent='Firmware '+S.firmware;$('linkState').textContent=S.connected?'Connected':'Disconnected';$('dot').className='statusDot '+(S.connected?'ok':'bad');$('pollBadge').textContent=S.polling?'Live data running':'Live data off';$('err').textContent=S.error||'';let st=String(S.status||'');let cx=connecting||(!S.connected&&(st.startsWith('CONNECTING')||st.startsWith('CONNECT QUEUED')||st.startsWith('AUTO RECONNECT')));$('linkState').textContent=cx?'Connecting…':(S.connected?'Connected':'Disconnected');$('dot').className='statusDot '+(cx?'wait':(S.connected?'ok':'bad'));renderAutoState();$('absDtcNote').style.display=S.moduleId===1?'block':'none';$('absFaultLookup').style.display=S.moduleId===1?'block':'none';$('absReadBtn').disabled=S.moduleId===1;if(S.moduleId===1&&!$('absDtcResult').textContent)renderAbsFaultLookup();document.querySelectorAll('[data-module-id]').forEach(x=>x.classList.toggle('active',Number(x.dataset.moduleId)===S.moduleId));$('hzrFanPanel').style.display=S.moduleId===3?'block':'none';$('cr2TestPanel').style.display=S.moduleId===0?'block':'none';$('testOnlyEngine').style.display=S.moduleId===0?'none':'block';let ids=['rpm','egr','boostDuty','boost','boostTarget','battery'];$('testFeedback').innerHTML=renderItems(items.filter(x=>ids.includes(x.id)));}async function refresh(){try{S=await(await fetch('/api/status',{cache:'no-store'})).json();if(Date.now()-lastAutoCheck>2000){lastAutoCheck=Date.now();try{let response=await fetch('/api/monitor/status',{cache:'no-store'});if(response.ok)A=await response.json();}catch(e){}}let st=String(S.status||'');if(S.connected||(!(st.startsWith('CONNECTING')||st.startsWith('CONNECT QUEUED')||st.startsWith('AUTO RECONNECT'))&&!S.busy))connecting=false;let d=await(await fetch('/api/sensors',{cache:'no-store'})).json();items=d.items||[];rememberItems();render();if(!modulesCatalog.length)fetchModulesCatalog();renderGroupCatalog();if(selectedTrend){renderMultiPickerIfNeeded();drawTrend();if(trendRange!=="live"&&Date.now()-multiFetchedAt>60000)loadMultiHistory();if(Date.now()-historyStorageChecked>15000)checkHistoryStorage();}if(S.moduleId===3){try{const f=await(await fetch("/api/hzr/fan/state",{cache:"no-store"})).json();$("hzrFanOutcome").textContent=f.message+(f.active?" (test running)":"");}catch(e){}}$('faultText').textContent=await(await fetch('/api/dtc',{cache:'no-store'})).text()}catch(e){$('linkState').textContent='UI offline';$('dot').className='statusDot bad';}}async function post(u,b){let o={method:'POST'};if(b){o.headers={'Content-Type':'application/x-www-form-urlencoded'};o.body=new URLSearchParams(b)}let r=await fetch(u,o),t=await r.text();if(!r.ok)alert(t);setTimeout(refresh,200);return r.ok;}
+function render(){byId=Object.fromEntries(items.map(x=>[x.id,x]));$('keyCards').innerHTML=renderItems(keyItems());$('allCards').innerHTML=renderItems(items.filter(x=>!$('liveSearch').value||(x.label+' '+x.id).toLowerCase().includes($('liveSearch').value.toLowerCase())));$('moduleName').textContent=S.module;$('liveModule').textContent=S.module;$('faultModule').textContent=S.module;$('addr').textContent=S.address;$('pin').textContent=S.obdPin;$('relay').textContent=S.relay?('K'+S.relay):'--';$('relayGpio').textContent=S.relayGpio===255?'--':S.relayGpio;let showVariant=(S.moduleId===2||S.moduleId===1)&&S.variant;$('variantLine').style.display=showVariant?'block':'none';$('variantId').textContent=showVariant?S.variant:'--';$('fw').textContent='Firmware '+S.firmware;$('linkState').textContent=S.connected?'Connected':'Disconnected';$('dot').className='statusDot '+(S.connected?'ok':'bad');$('pollBadge').textContent=S.polling?'Live data running':'Live data off';$('err').textContent=S.error||'';let st=String(S.status||'');let cx=connecting||(!S.connected&&(st.startsWith('CONNECTING')||st.startsWith('CONNECT QUEUED')||st.startsWith('AUTO RECONNECT')));$('linkState').textContent=cx?'Connecting…':(S.connected?'Connected':'Disconnected');$('dot').className='statusDot '+(cx?'wait':(S.connected?'ok':'bad'));renderAutoState();const testsReady=A.enabled===false&&!!S.connected;$('testsMode').textContent=A.enabled?'Automatic logger owns the ECU connection. Pause automatic logging in Overview, then connect manually using Advanced to run tests.':(!S.connected?'Manual test mode requires an ECU connection in Advanced.':'Manual ECU connection is active. Active tests may be used below.');document.querySelectorAll('#tests button').forEach(b=>{b.disabled=!testsReady});$('absDtcNote').style.display=S.moduleId===1?'block':'none';$('absFaultLookup').style.display=S.moduleId===1?'block':'none';$('absReadBtn').disabled=S.moduleId===1;if(S.moduleId===1&&!$('absDtcResult').textContent)renderAbsFaultLookup();document.querySelectorAll('[data-module-id]').forEach(x=>x.classList.toggle('active',Number(x.dataset.moduleId)===S.moduleId));$('hzrFanPanel').style.display=S.moduleId===3?'block':'none';$('cr2TestPanel').style.display=S.moduleId===0?'block':'none';$('testOnlyEngine').style.display=S.moduleId===0?'none':'block';let ids=['rpm','egr','boostDuty','boost','boostTarget','battery'];$('testFeedback').innerHTML=renderItems(items.filter(x=>ids.includes(x.id)));}async function refresh(){
+  if(refreshBusy)return;refreshBusy=true;
+  let statusResponded=false;
+  try{
+    try{S=await T1N.request('/api/status');statusResponded=true;}catch(e){
+      items=items.map(x=>({...x,stale:1}));A={enabled:null};render();
+      $('linkState').textContent='Scanner not responding';$('dot').className='statusDot bad';return;
+    }
+    if(Date.now()-lastAutoCheck>5000){lastAutoCheck=Date.now();try{A=await T1N.request('/api/monitor/status');}catch(e){A={enabled:null};}}
+    let sensorsError='';
+    try{
+      const d=await T1N.request('/api/sensors');
+      if(!Array.isArray(d.items)||!Number.isInteger(d.moduleId))throw Error('Invalid sensor response');
+      if(d.moduleId===Number(S.moduleId))items=d.items.map(x=>({...x,receivedAt:Date.now()}));else items=items.map(x=>({...x,stale:1}));
+    }catch(e){items=items.map(x=>({...x,stale:1}));sensorsError=e.message;}
+    rememberItems();render();
+    if(Date.now()-(window.lastAlertRefresh||0)>10000){window.lastAlertRefresh=Date.now();loadAlerts();}
+    if(sensorsError){$('linkState').textContent='Scanner online · live data unavailable';$('err').textContent=sensorsError;}
+    if(!modulesCatalog.length)fetchModulesCatalog();
+    const view=document.querySelector('.view.on')?.id;
+    if(view==='live')renderGroupCatalog();
+    if(selectedTrend){renderMultiPickerIfNeeded();drawTrend();if(Date.now()-multiFetchedAt>30000)loadMultiHistory();if(Date.now()-historyStorageChecked>15000)checkHistoryStorage();}
+    if(view==='faults'){loadDtcSnapshot();}
+    if(view==='faults')try{$('faultText').textContent=await(await fetch('/api/dtc',{cache:'no-store'})).text();}catch(e){$('faultText').textContent='Fault snapshot unavailable';}
+  }finally{refreshBusy=false;}
+}
+async function loadAlerts(){
+  try{
+    const d=await T1N.request('/api/alerts');
+    $('healthRules').innerHTML=d.rules.map(r=>'<div class="metric '+(r.active?'warn':'')+'"><b>'+esc(r.id)+'</b><div>'+(!r.enabled?'Not configured':r.active?(r.acknowledged?'Active · acknowledged':'Active'):r.available?'No active threshold alert':'Measurements unavailable')+'</div><div class="note">'+(r.enabled?'Trigger '+r.trigger+' / clear '+r.clear+' '+esc(r.unit)+' · '+r.debounceMs+' ms persistence':'Threshold required')+'</div>'+(r.active&&!r.acknowledged?'<button onclick="ackAlert(\''+esc(r.id)+'\')">Acknowledge</button>':'')+'</div>').join('');
+  }catch(e){$('healthRules').textContent='Alert status unavailable: '+e.message;}
+}
+async function saveAlertRule(enabled){
+  try{const r=await fetch('/api/alerts/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id:$('alertRule').value,enabled:enabled?'1':'0',trigger:$('alertTrigger').value,clear:$('alertClear').value,debounceMs:$('alertDebounce').value,severity:$('alertSeverity').value})});if(!r.ok)throw Error(await r.text());$('alertResult').textContent='Rule saved on ESP32';loadAlerts();}catch(e){$('alertResult').textContent=e.message;}
+}
+async function ackAlert(id){if(await post('/api/alerts/ack',{id}))loadAlerts();}
+async function loadAlertEvents(){try{const d=await T1N.request('/api/alerts/events');$('alertEvents').textContent=(d.truncated?'Recent tail only\n':'')+(d.rows.join('\n')||'No saved alert events');}catch(e){$('alertEvents').textContent=e.message;}}
+async function loadDtcEvents(){try{const d=await T1N.request('/api/monitor/dtc/events');$('dtcEvents').textContent=(d.truncated?'Recent tail only\n':'')+(d.rows.join('\n')||'No saved DTC transitions');}catch(e){$('dtcEvents').textContent=e.message;}}
+async function loadDtcSnapshot(){
+  try{const d=await T1N.request('/api/monitor/dtc');$('dtcSnapshot').innerHTML=d.modules.map(m=>'<div class="note">Module '+m.id+': '+(!m.supported?'DTC read unsupported':!m.baseline?'Unknown · no successful complete scan':m.codes.length+' saved code(s) · '+(m.lastScanEpoch?new Date(m.lastScanEpoch*1000).toISOString():'last scan UTC unknown'))+(m.baseline?m.codes.map(c=>'<div>Raw '+esc(c.rawCode)+' · status 0x'+Number(c.rawStatus).toString(16).padStart(2,'0')+'</div>').join(''):'')+'</div>').join('');}catch(e){$('dtcSnapshot').textContent='Saved fault snapshot unavailable: '+e.message;}
+}
+async function post(u,b){let o={method:'POST'};if(b){o.headers={'Content-Type':'application/x-www-form-urlencoded'};o.body=new URLSearchParams(b)}let r=await fetch(u,o),t=await r.text();if(!r.ok)alert(t);setTimeout(refresh,200);return r.ok;}
 async function fetchModulesCatalog(){
  try{const r=await fetch('/api/modules',{cache:'no-store'});if(!r.ok)return;
  const d=await r.json();modulesCatalog=d.modules||[];renderModuleCatalog();}catch(e){}
@@ -364,7 +472,7 @@ async function renderGroupCatalog(force=false){
    <div class="note">${g.unsupported?'Unsupported by this ECU · ':''}${esc(g.problem||'')}
    ${g.lastMs?' · received on device':' · not yet read'}</div>
    <pre style="white-space:pre-wrap;word-break:break-word;font-size:12px">${esc(g.raw||'No response captured yet')}</pre>
-   <div class="actions"><button onclick="readGroupOnce('${esc(g.id)}')" ${S.polling?'disabled':''}>Read once</button></div></div>`).join(''):
+   <div class="actions"><button onclick="readGroupOnce('${esc(g.id)}')" ${S.polling||A.enabled!==false?'disabled':''}>Read once</button></div></div>`).join(''):
     '<div class="note">This module has no additional validated raw live-data groups yet.</div>';
  }catch(e){b.innerHTML='<div class="note">Unable to read group catalog</div>';}
 }
@@ -376,5 +484,5 @@ async function readGroupOnce(group){
 async function readDtc(){if(A.enabled){await refresh();return;}await post('/api/dtc/read');await refresh()}const acts=[["EGR",17],["Boost",18],["Intake shutoff",26],["Glow stage",30],["Fan control",27]];function buildActuators(){let h="";for(const a of acts){h+=`<div style="margin:12px 0;padding:10px;border:1px solid var(--line);border-radius:10px"><b>${a[0]}</b><div class="actions"><input id="v${a[1]}" type="number" min="0" max="100" step="1" value="50" style="width:88px;padding:10px;border-radius:8px;border:1px solid var(--line);background:#08111f;color:#fff"><button class="primary" onclick="act(${a[1]})">Send %</button><button onclick="releaseAct(${a[1]})">Release</button></div></div>`}$('actuatorControls').innerHTML=h;}function explainTest(text,ok,label,before){let box=$('testResult');box.classList.remove('testResultGood','testResultBad','testResultWait');let rejected=text.match(/NRC 0x([0-9A-F]+)/i);let accepted=/ECU accepted command/.test(text);let msg=ok&&accepted?'ECU ACCEPTED — '+label:rejected?'ECU REJECTED — '+label:'NO CONFIRMED ACTUATION — '+label;if(rejected){const causes={'31':'The ECU does not permit this request or these parameters in its current configuration/session. It is not evidence of a wiring failure.','22':'The ECU reports that operating conditions are not suitable.','33':'The ECU requires security authorization.','11':'The ECU does not support this diagnostic service.','12':'The requested function is unsupported.'};msg+='\n'+(causes[rejected[1].toUpperCase()]||'See the ECU negative-response code below.');}if(accepted){msg+='\nCommand accepted. Physical change is not yet verified. Check the relevant sensor or output. Some outputs have no observable PID.';if(before&&before.length)msg+='\nBaseline before command: '+before;}box.textContent=msg+'\n\n'+text;box.classList.add(accepted?'testResultGood':rejected?'testResultBad':'testResultWait');$('testExplain').textContent='A positive response confirms command acceptance only; verification requires a matching sensor change or an observable output.';}
 async function hzrStatus(){let p=$('hzrFanStatus');p.textContent="Checking...";try{let r=await fetch('/api/hzr/fan/status',{method:'POST'});p.textContent=await r.text();if(!r.ok)p.textContent='ERROR: '+p.textContent;}catch(e){p.textContent='Request failed: '+e;}}
 async function hzrStart(){if(!confirm('Experimental fan command: may override other HVAC outputs for 4 seconds. Vehicle parked? Hands clear of fan?'))return;let p=$('hzrFanOutcome');p.textContent='Sending fan command...';try{let r=await fetch('/api/hzr/fan/on',{method:'POST'});p.textContent=await r.text();if(!r.ok)p.textContent='ERROR: '+p.textContent;}catch(e){p.textContent='Command result unknown: '+e;}}
-async function testCmd(name){let r=await fetch("/api/test",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({name})}),t=await r.text();explainTest(t,r.ok,name,'');setTimeout(refresh,200);}async function act(id){let v=$('v'+id).value;let r=await fetch("/api/test/actuator",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({id,value:v})}),t=await r.text();explainTest(t,r.ok,'Actuator '+id+' at '+v+'%', '');}async function releaseAct(id){let r=await fetch("/api/test/release",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({id})}),t=await r.text();explainTest(t,r.ok,'Actuator '+id+' release','');}async function refreshLog(){if(logPaused)return;let sel=window.getSelection&&window.getSelection().toString();if(sel)return;try{$('activityLog').textContent=await(await fetch('/api/activity-log',{cache:'no-store'})).text()}catch(e){}}function toggleLog(){logPaused=!logPaused;$('pauseLogBtn').textContent=logPaused?'Resume':'Pause';if(!logPaused)refreshLog()}async function copyLog(){try{await navigator.clipboard.writeText($('activityLog').textContent)}catch(e){alert('Copy failed. Pause the log and select the text manually.')}}function exportLog(){window.location='/api/activity-log.txt'}async function clearActivityLog(){await post('/api/activity-log/clear');$('activityLog').textContent='';}buildActuators();syncHistoryClock();refresh();refreshLog();setInterval(refresh,850);setInterval(refreshLog,1200);</script></body></html>)HTML";}
+async function testCmd(name){let r=await fetch("/api/test",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({name})}),t=await r.text();explainTest(t,r.ok,name,'');setTimeout(refresh,200);}async function act(id){let v=$('v'+id).value;let r=await fetch("/api/test/actuator",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({id,value:v})}),t=await r.text();explainTest(t,r.ok,'Actuator '+id+' at '+v+'%', '');}async function releaseAct(id){let r=await fetch("/api/test/release",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({id})}),t=await r.text();explainTest(t,r.ok,'Actuator '+id+' release','');}async function refreshLog(){if(logPaused)return;let sel=window.getSelection&&window.getSelection().toString();if(sel)return;try{$('activityLog').textContent=await(await fetch('/api/activity-log',{cache:'no-store'})).text()}catch(e){}}function toggleLog(){logPaused=!logPaused;$('pauseLogBtn').textContent=logPaused?'Resume':'Pause';if(!logPaused)refreshLog()}async function copyLog(){try{await navigator.clipboard.writeText($('activityLog').textContent)}catch(e){alert('Copy failed. Pause the log and select the text manually.')}}function exportLog(){window.location='/api/activity-log.txt'}async function clearActivityLog(){await post('/api/activity-log/clear');$('activityLog').textContent='';}buildActuators();refresh();setInterval(()=>{let changed=false;items=items.map(x=>{if(!x.stale&&x.valid&&Number.isFinite(x.receivedAt)&&Number(x.ageMs)+Date.now()-x.receivedAt>24000){changed=true;return {...x,stale:1}}return x});if(changed)render()},1000);setInterval(refresh,2000);setInterval(()=>{if(document.querySelector('.view.on')?.id==='logs')refreshLog()},3000);</script></body></html>)HTML";}
 #endif // T1N_USE_GZIP_PAGE

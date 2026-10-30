@@ -34,7 +34,7 @@ bool connectModule(ModuleId module){
   if(module==MOD_ENGINE){
     // Try a direct CR2 StartCommunication first. Verify a real 21 12 live reply
     // before replacing the known-good full Autel replay.
-    activity("Trying short CR2 fast-init; will fall back automatically if unsupported.");
+    activity("Trying short CR2 fast-init; proven Autel fallback will run if unsupported.");
     bool fast=connectFastModule(MOD_ENGINE);
     if(fast){
       livePolling=false;
@@ -48,8 +48,8 @@ bool connectModule(ModuleId module){
         setStatus("CONNECTED - CR2 (QUICK INIT)");
         return true;
       }
-      activity("Short CR2 init did not pass live-data verification; using proven replay.");
-    }else activity("Short CR2 init not accepted; using proven replay.");
+      activity("Short CR2 verification failed; starting proven Autel replay.");
+    }else activity("Short CR2 init not accepted; starting proven Autel replay.");
     // Keep legacy replay in the source, but exclude its implementation from
     // this build for the existing 1.25 MiB OTA partition. Short engine init
     // has been confirmed on this vehicle by a 21 12 live-data response.
@@ -360,28 +360,35 @@ String valueJson(const char*id,const char*label,const ValueState&v){
   return"{\"id\":\""+String(id)+"\",\"label\":\""+String(label)+"\",\"value\":\""+jsonEscape(v.text)+"\",\"unit\":\""+jsonEscape(v.unit)+"\",\"valid\":"+String(v.valid?1:0)+",\"sampleMs\":"+String(v.updatedMs)+",\"ageMs\":"+String(v.valid?(uint32_t)(millis()-v.updatedMs):0)+",\"stale\":"+String(stale(v)?1:0)+",\"state\":\""+state+"\",\"expected\":\""+jsonEscape(expected)+"\"}";
 }
 void historyObserve(const char *id,const ValueState &v);
-String sensorsJson(bool captureOnly=false,bool stream=false){
-  // Full 100+ metric responses previously exhausted fragmented String heap:
-  // ESP32 emitted empty fragments and malformed JSON after ~8 KiB.
-  // Stream a bounded 2 KiB buffer instead of retaining the full payload.
-  String s=captureOnly?String(""):("{\"module\":\""+jsonEscape(moduleName(activeModule))+"\",\"items\":[");
+#include "bounded_json.h"
+void sensorHttpSink(const char *data,size_t length,void*){web.sendContent(data,length);}
+String sensorsJson(bool captureOnly=false){
+  // captureOnly walks the same canonical sensor catalogue without serializing.
+  BoundedJson out(sensorHttpSink);
   bool first=true;
-  if(stream&&!captureOnly){
+  if(!captureOnly){
+    web.sendHeader("Cache-Control","no-store");
     web.setContentLength(CONTENT_LENGTH_UNKNOWN);
     web.send(200,"application/json","");
-    s.reserve(2500);
+    out.raw("{\"module\":");out.string(moduleName(activeModule).c_str());
+    out.raw(",\"moduleId\":");out.integer((uint8_t)activeModule);
+    out.raw(",\"uptimeMs\":");out.integer(millis());out.raw(",\"items\":[");
   }
   auto add=[&](const char*id,const char*label,const ValueState&v){
     if(captureOnly){historyObserve(id,v);return;}
-    String part=valueJson(id,label,v);
-    if(!part.length())return; // never emit a dangling separator
-    if(!first)s+=",";
+    if(!first)out.raw(",");
     first=false;
-    if(stream&&s.length()+part.length()>2048){
-      web.sendContent(s);
-      s="";
-    }
-    s+=part;
+    out.raw("{\"id\":");out.string(id);out.raw(",\"label\":");out.string(label);
+    out.raw(",\"value\":");out.string(v.text.c_str());out.raw(",\"unit\":");out.string(v.unit.c_str());
+    out.raw(",\"valid\":");out.integer(v.valid?1:0);out.raw(",\"sampleMs\":");out.integer(v.updatedMs);
+    out.raw(",\"ageMs\":");out.integer(v.valid?(uint32_t)(millis()-v.updatedMs):0);
+    out.raw(",\"stale\":");out.integer(stale(v)?1:0);
+    out.raw(",\"state\":");
+    String health=activeModule==MOD_ENGINE?engineHealth(id,v):String(stale(v)?"stale":"neutral");
+    out.string(health.c_str());
+    out.raw(",\"expected\":");
+    String expected=activeModule==MOD_ENGINE?engineExpected(id):String("");
+    out.string(expected.c_str());out.raw("}");
   };
   if(activeModule==MOD_ENGINE){
     add("rpm","Engine RPM",engRpm);add("speed","Vehicle speed",engSpeed);add("coolant","Coolant temperature",engCoolant);add("oilTemp","Engine oil temperature",engOilTemp);add("battery","Battery voltage",engBattery);add("lowFuel","Low-side fuel pressure",engLowFuel);
@@ -437,12 +444,7 @@ String sensorsJson(bool captureOnly=false,bool stream=false){
       }
     }
   }
-  if(!captureOnly)s+="]}";
-  if(stream&&!captureOnly){
-    web.sendContent(s);
-    web.sendContent("");
-    return "";
-  }
-  return s;
+  if(!captureOnly){out.raw("]}");out.flush();web.sendContent("");}
+  return String();
 }
-String moduleStatusJson(){String s="{";s+="\"firmware\":\""+String(FIRMWARE_VERSION)+"\",";s+="\"module\":\""+jsonEscape(moduleName(activeModule))+"\",";s+="\"moduleId\":"+String((int)activeModule)+",";s+="\"address\":\"0x"+hex2(activeEcuAddr)+"\",";s+="\"obdPin\":"+String(moduleObdPin(activeModule))+",";int ri=relayIndexForModule(activeModule);s+="\"relay\":"+String(ri>=0?ri+1:0)+",";s+="\"relayGpio\":"+String(ri>=0?RX_PIN:255)+",";s+="\"connected\":"+String(diagnosticSession?1:0)+",";s+="\"polling\":"+String(livePolling?1:0)+",";s+="\"busy\":"+String(busy?1:0)+",";s+="\"status\":\""+jsonEscape(scannerStatus)+"\",";s+="\"error\":\""+jsonEscape(lastError)+"\",";s+="\"variant\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantId:activeModule==MOD_ABS?(absKm20?"ABSR_5_7_KM20":"Unknown"):"")+"\",";s+="\"variantRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantRaw:activeModule==MOD_ABS?absPartId:"")+"\",";s+="\"identRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsIdentRaw:"")+"\",";s+="\"wifi\":\""+jsonEscape(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():WiFi.softAPIP().toString())+"\"";s+="}";return s;}
+String moduleStatusJson(){String s="{";s+="\"firmware\":\""+String(FIRMWARE_VERSION)+"\",";s+="\"module\":\""+jsonEscape(moduleName(activeModule))+"\",";s+="\"moduleId\":"+String((int)activeModule)+",";s+="\"address\":\"0x"+hex2(activeEcuAddr)+"\",";s+="\"obdPin\":"+String(moduleObdPin(activeModule))+",";int ri=relayIndexForModule(activeModule);s+="\"relay\":"+String(ri>=0?ri+1:0)+",";s+="\"relayGpio\":"+String(ri>=0?RX_PIN:255)+",";s+="\"connected\":"+String(diagnosticSession?1:0)+",";s+="\"polling\":"+String(livePolling?1:0)+",";s+="\"busy\":"+String(busy?1:0)+",";s+="\"status\":\""+jsonEscape(scannerStatus)+"\",";s+="\"error\":\""+jsonEscape(lastError)+"\",";s+="\"variant\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantId:activeModule==MOD_ABS?(absKm20?"ABSR_5_7_KM20":"Unknown"):"")+"\",";s+="\"variantRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantRaw:activeModule==MOD_ABS?absPartId:"")+"\",";s+="\"identRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsIdentRaw:"")+"\",";s+="\"wifi\":\""+jsonEscape(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():WiFi.softAPIP().toString())+"\"";s+=",\"rawLogCapacityBytes\":16384,\"activityLogCapacityBytes\":8192,\"logAllocationErrors\":"+String(diagnosticLogAllocationErrors)+",\"freeHeap\":"+String(ESP.getFreeHeap())+",\"minFreeHeap\":"+String(ESP.getMinFreeHeap())+",\"maxAllocHeap\":"+String(ESP.getMaxAllocHeap())+",\"transportRequests\":"+String(transportRequests)+",\"transportFailures\":"+String(transportFailures)+",\"transportLastMs\":"+String(transportLastMs)+",\"transportMaxMs\":"+String(transportMaxMs)+",\"pollPauseMs\":"+String(cfg.pollIntervalMs)+",\"uptimeMs\":"+String(millis())+",\"resetReasonCode\":"+String((int)esp_reset_reason())+"}";return s;}

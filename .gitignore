@@ -1,0 +1,10 @@
+**/__pycache__/
+node_modules/
+dist/
+build/
+firmware/t1n_obd/build/
+firmware/t1n_obd/wifi_build_config.h
+firmware/t1n_obd/*_gzip_generated.h
+*.bin
+*.elf
+*.map
