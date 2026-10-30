@@ -26,10 +26,10 @@ const server=http.createServer((req,res)=>{
  if(u.pathname==='/api/status')data={moduleId,module:modules[moduleId].name,connected,polling:connected,firmware:'TEST-FIXTURE',uptimeMs:2000,status:'Read-only fixture',error:''};
  else if(u.pathname==='/api/sensors'){
   if(mode==='sensorError'){code=503;data={error:'Sensor response unavailable'};}
-  else data={moduleId,module:modules[moduleId].name,items:moduleId===2?[sensor('temp',50)]:[sensor('rpm',812,'rpm'),sensor('coolant',85),sensor('battery',14,'V'),sensor('rail',300,'bar'),sensor('railTarget',302,'bar'),sensor('boost',1000,'hPa'),sensor('boostTarget',1002,'hPa'),sensor('speed',0,'km/h')]};
+  else data={moduleId,module:modules[moduleId].name,items:moduleId===2?[sensor('temp',50)]:[sensor('rpm',812,'rpm'),sensor('coolant',85),sensor('battery',14,'V'),sensor('rail',300,'bar'),{...sensor('railTarget',302,'bar'),sampleMs:mode==='skewPending'?5000:1000},sensor('boost',1000,'hPa'),sensor('boostTarget',1002,'hPa'),sensor('speed',0,'km/h')]};
  }
  else if(u.pathname==='/api/history/data'){
-  if(mode==='pending'&&pending++<2){code=202;data={ok:false,loading:true,code:'HISTORY_LOADING',error:'SD query loading'};}
+  if((mode==='pending'||mode==='skewPending')&&pending++<(mode==='skewPending'?6:2)){code=202;data={ok:false,loading:true,code:'HISTORY_LOADING',error:'SD query loading'};}
   else if(mode==='historyError'||mode==='storageError'){code=503;data={ok:false,code:'HISTORY_READ_FAILED',error:'Card read failed',points:[]};}
   else data={ok:true,schemaVersion:1,storage:'microSD',module:Number(u.searchParams.get('module')),id:u.searchParams.get('id'),range:u.searchParams.get('range'),points:mode==='empty'?[]:points,count:mode==='empty'?0:2,truncated:mode==='truncated',recording:{minimumChangeSeconds:10,heartbeatSeconds:1800}};
  }
@@ -91,6 +91,57 @@ async function mobileTests(browser,name){
  try{
   await page.goto(base+'/');await page.waitForFunction(()=>document.querySelector('#allCards')?.textContent.includes('coolant'));
   await page.click('[data-v="live"]');await page.locator('#allCards [data-metric-id="coolant"]').click();
+  await page.waitForFunction(()=>document.querySelector('#trendPlot svg'));
+  // A live pair sampled 4 seconds apart must not prevent saved-chart loading.
+  mode='skewPending';pending=0;await page.evaluate(()=>refresh());
+  assert.match(await page.locator('#allCards [data-metric-id="rail"] .compare').textContent(),/Live Δ unavailable.*4.0 s apart/);
+  await page.evaluate(()=>{client.invalidateHistory();showTrend('rail');});
+  await page.waitForFunction(()=>document.querySelector('#trendPlot .historyLoading'));
+  const loadingToken=await page.evaluate(()=>multiFetchToken);
+  await page.evaluate(()=>{showTrend('rail');showTrend('rail');showTrend('rail');});
+  assert.equal(await page.evaluate(()=>multiFetchToken),loadingToken,'Repeated taps must preserve the active load');
+  assert.match(await page.locator('#trendPlot').textContent(),/chart appears automatically/);
+  await page.waitForFunction(()=>document.querySelector('#trendPlot svg'));
+  assert.equal(await page.evaluate(()=>multiData().length),2);
+  assert.deepEqual(await page.evaluate(()=>multiData()[0].points),points);
+  assert.equal(await page.locator('#trendPlot').getAttribute('aria-busy'),'false');
+  assert.match(await page.locator('#allCards [data-metric-id="rail"] .compare').textContent(),/Live Δ unavailable/);
+  mode='normal';await page.evaluate(()=>{showTrend('coolant');});
+  await page.waitForFunction(()=>document.querySelector('#trendPlot svg'));
+  // The metric picker has an explicit Done action outside its scrolling choices.
+  await page.click('#multiPickerToggle');
+  assert.equal(await page.locator('#multiPickerToggle').getAttribute('aria-expanded'),'true');
+  await page.fill('#multiSearch','battery');
+  assert.equal(await page.locator('#multiOptions input').count(),1);
+  await page.locator('#multiOptions input').check();
+  assert.deepEqual(await page.evaluate(()=>multiPicked),['coolant','battery']);
+  await page.click('#multiPickerDone');
+  assert.equal(await page.locator('#multiPickerToggle').getAttribute('aria-expanded'),'false');
+  assert.equal(await page.locator('#multiPicker').isVisible(),false);
+  assert.deepEqual(await page.evaluate(()=>multiPicked),['coolant','battery'],'Done preserves the selected chart measurements');
+  await page.evaluate(()=>renderMultiPicker());
+  assert.equal(await page.locator('#multiPicker').isVisible(),false,'Refreshing choices must not reopen the picker');
+  await page.click('#multiPickerToggle');
+  await page.fill('#multiSearch','');
+  assert(await page.locator('#multiOptions input').count()>8,'Fixture exposes a long measurement list');
+  await page.evaluate(()=>document.querySelector('#multiOptions').scrollTop=10000);
+  const doneBox=await page.locator('#multiPickerDone').boundingBox(),optionBox=await page.locator('#multiOptions').boundingBox();
+  assert(doneBox&&optionBox&&doneBox.y+doneBox.height<=optionBox.y,'Done remains outside the scrolling measurement list');
+  await page.click('#multiPickerDone');
+  await page.evaluate(()=>showTrend('rail'));
+  await page.waitForFunction(()=>document.querySelector('#trendPlot svg'));
+  const railCard=page.locator('#allCards [data-metric-id="rail"]');
+  assert(await railCard.evaluate(el=>el.classList.contains('pairedCard')));
+  // Use a real four-digit reading: it must fit as a whole, not 229 + 6.
+  await page.evaluate(()=>{
+    const number=document.querySelector('#allCards [data-metric-id="rail"] .metricNumber');
+    number.textContent='2296';
+  });
+  assert(await railCard.locator('.metricNumber').first().evaluate(el=>{
+    const style=getComputedStyle(el),box=el.getBoundingClientRect(),side=el.closest('.pairSide').getBoundingClientRect();
+    return style.whiteSpace==='nowrap'&&box.height<parseFloat(style.fontSize)*1.5&&box.right<=side.right;
+  }),'Paired four-digit readings fit on one line at 375px');
+  await page.evaluate(()=>showTrend('coolant'));
   await page.waitForFunction(()=>document.querySelector('#trendPlot svg'));
   await screenshot(page,name+'-mobile-trends');
   await page.evaluate(()=>checkHistoryStorage());assert.match(await page.locator('#historyStorage').textContent(),/history ready/);

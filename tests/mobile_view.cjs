@@ -7,7 +7,7 @@ function element(id){
   const classes=new Set(['overview'].includes(id)?['on']:[]);
   return {id,textContent:'',innerHTML:'',value:'',checked:true,style:{},dataset:{},clientWidth:375,
     classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x),toggle(x,state){if(state===undefined)state=!classes.has(x);state?classes.add(x):classes.delete(x);}},
-    querySelectorAll:()=>[],scrollIntoView(){},appendChild(){},click(){},remove(){}};
+    setAttribute(){},blur(){},focus(){},querySelectorAll:()=>[],scrollIntoView(){},appendChild(){},click(){},remove(){}};
 }
 function fixture(){
   const nodes=new Map(),requests=[],timers=[],views=['overview','live','faults','tests','modules','logs'];

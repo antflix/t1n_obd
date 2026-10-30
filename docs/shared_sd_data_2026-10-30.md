@@ -37,4 +37,24 @@ The working firmware remains the rollback option. Credentials and raw backups ar
 
 ## Remaining validation and limits
 
-Candidate hardware validation is pending. A 2 ms scan budget cannot bound an individual SD driver's read or flush latency; measure the exposed maximum durations on hardware. The single-thread firmware still services some HTTP requests inside existing transport waits; this phase does not claim full task isolation or change the proven transport implementation. The inherited manual-monitor ownership/retry architecture is not reworked in this phase, and unqualified autonomous ABS visits must remain disabled. This candidate does not implement new alert rules or change the Pi's deployed startup/services.
+Initial hardware validation passed after installation; extended reliability testing remains pending. A 2 ms scan budget cannot bound an individual SD driver's read or flush latency; measure the exposed maximum durations on hardware. The single-thread firmware still services some HTTP requests inside existing transport waits; this phase does not claim full task isolation or change the proven transport implementation. The inherited manual-monitor ownership/retry architecture is not reworked in this phase, and unqualified autonomous ABS visits must remain disabled. This candidate does not implement new alert rules or change the Pi's deployed startup/services.
+
+## Installed verification
+
+Installed `1.10.19-shared-sd-test` over OTA at `192.168.8.111` after the user explicitly requested upload. Application SHA-256: `69a07af9e796c6bcc2ccc36ab1335ec6dfc8cbc276f7f0f071635a340fb1e3bb`. The firmware reported the new version after reboot. Standard curl multipart transfers were interrupted; a paced Python multipart transfer completed with HTTP 200. The cause of the interrupted transfers is not established. No USB flashing or new flash backup was needed.
+
+Installed all four matching SD dashboard assets, verified each by SHA-256 readback, and verified that `/` serves the packaged index. `/pi` and the compiled `/t1n-data.js` both returned HTTP 200. Restored the previous manual engine session; autonomous monitoring remains disabled as it was before installation. Engine quick initialization succeeded and all 49 sensor entries were valid and fresh. The sensor JSON response exceeded 8 KB and parsed successfully.
+
+A real SD-backed one-hour RPM query returned 174 records through the cooperative loading contract in approximately 5.6 seconds while engine polling continued. Initial post-query health reported 56 successful writes, zero read/write/corruption errors, maximum observed read 15 ms and write 17 ms. Existing journals and unrelated SD files were not erased. Subsequent vehicle-speed readings indicated movement, so all remaining checks were strictly read-only; no additional session changes, resets, or firmware updates were attempted. Private detailed responses are kept with the installation artifact rather than committed as vehicle recordings.
+
+This verifies installation, initial engine connectivity, streamed JSON, asset serving, and actual SD reads/writes. It does not establish long-duration reliability, qualification of secondary modules, or Pi kiosk startup behavior. The known-good 1.10.18 artifact remains available for rollback.
+
+## Chart usability repair — 1.10.20-chart-ui-test
+
+The user identified the message as “measurements are not time-aligned,” rather than a history-query timeout. This is the live paired-reading difference guard: actual and requested values are refreshed by different ECU requests. The strict two-second alignment gate remains; the UI now explicitly identifies the unavailable **live difference**, reports sample separation, and explains that saved charts remain available. A read-only hardware query returned 200 saved rail records in about 7.2 seconds while engine polling continued, with 5,647 successful SD writes and no recorded read, write, or corruption errors at the pre-change check.
+
+The history area now shows an immediate loading placeholder, completed-series count, automatic-completion guidance, and accessible busy state. Repeated taps on the already selected metric retain the in-progress query and current comparison selection instead of resetting chart state. No browser history collector, timing bypass, transport change, scheduler change, or new history fallback was added.
+
+The measurement selector now has a visible Done button outside its scrolling list, a Hide metrics toggle with expanded state, integrated search, and selected-series count. Closing preserves choices. Paired cards occupy the correct parent grid columns and numeric values no longer split mid-number on narrow screens.
+
+Verification: all offline shared SD checks passed. Chromium and WebKit fixtures passed, including six delayed history-loading responses with four-second live sample skew, repeated taps preserving the active load, automatic chart display despite unavailable live differences, selector Done/filter/long-list behavior, preserved selections, and four-digit value layout at 375 px. Installation results are recorded after deployment.
