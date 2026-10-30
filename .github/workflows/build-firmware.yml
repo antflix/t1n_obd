@@ -32,7 +32,8 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@3.3.12
           arduino-cli core list
-      - name: Inject Wi-Fi credential into build
+      - name: Inject production Wi-Fi credential into build
+        if: github.ref == 'refs/heads/main'
         env:
           ANTNET_WIFI_PASSWORD: ${{ secrets.ANTNET_WIFI_PASSWORD }}
         run: |

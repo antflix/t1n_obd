@@ -33,7 +33,7 @@ ECU transport, physical pin routing (engine RX13/TX23; SD CS22/CLK18/MISO19/MOSI
 - History native tests additionally passed AddressSanitizer and UndefinedBehaviorSanitizer.
 - Initial Arduino build with ESP32 core 3.3.12 and `PartitionScheme=min_spiffs`: 1,400,320 bytes program, 115,040 bytes static RAM. Final artifact size/checksum and deployment evidence are recorded separately after final packaging.
 
-The working firmware remains the rollback option. Credentials and raw backups are private and excluded from Git. No raw vehicle recordings are committed.
+The working firmware remains the rollback option. Credentials and raw backups are private and excluded from Git. Public development CI builds omit the Wi-Fi build secret; the private installation artifact retains the existing network configuration. No raw vehicle recordings are committed.
 
 ## Remaining validation and limits
 
