@@ -240,10 +240,10 @@ String monitorStatusJson(){
   return s+"]}";
 }
 
-// Non-vehicle self-test: exercise each module's namespaced CRC record on the
+// Non-vehicle self-test: exercise each module's namespaced checksummed record on the
 // mounted card, then remove temporary files. This never invents ECU samples.
 bool monitorStorageSelfTest(String &report){
-  if(!sdCardReady()||!hReady||!hUsingSD){
+  if(!sdCardReady()||!hReady){
     report="SD history backend unavailable";return false;
   }
   if(busy||jobConnect||diagnosticSession){

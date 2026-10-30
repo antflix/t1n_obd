@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080f19"><title>Sprinter monitor</title>
+<style>
+:root{color-scheme:dark;--bg:#080f19;--panel:#102033;--line:#29415a;--text:#edf6ff;--muted:#a1b8cd;--accent:#60c9ff;--warn:#ffcb79;--bad:#ff8e98;--ok:#80deb1}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px system-ui,-apple-system,sans-serif}button,select{font:inherit;color:inherit;background:#152a40;border:1px solid var(--line);border-radius:8px;min-height:44px;padding:8px 13px;touch-action:manipulation}button{cursor:pointer}button:disabled{opacity:.5;cursor:default}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}a{color:var(--accent)}.shell{height:100vh;height:100dvh;min-height:400px;display:grid;grid-template-rows:auto 1fr auto;gap:8px;padding:8px;max-width:1280px;margin:auto}header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:42px}h1{font-size:20px;margin:0;letter-spacing:.04em}h2{font-size:20px;margin:0 0 12px}h3{font-size:16px;margin:0 0 8px}.scanner{font-size:13px;color:var(--muted)}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}main{min-height:0;overflow:auto;overscroll-behavior:contain}.page[hidden]{display:none!important}.page{height:100%;min-height:0}.dashboard{display:grid;grid-template-rows:auto 1fr;gap:8px}.states{display:flex;flex-wrap:wrap;gap:5px}.state{font-size:12px;padding:5px 8px;background:#102033;border:1px solid var(--line);border-radius:6px}.gauges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;min-height:0}.gauge{border:1px solid var(--line);border-radius:12px;background:linear-gradient(145deg,#162c43,#0c1928);padding:12px;display:flex;flex-direction:column;justify-content:center;min-width:0;min-height:128px}.gauge.stale{border-color:#80613c}.label{color:var(--muted);font-size:14px}.reading{font-size:clamp(28px,5.5vw,56px);font-weight:750;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.unit{font-size:14px;color:var(--muted);margin-left:5px}.detail{font-size:12px;color:var(--muted);line-height:1.4;min-height:18px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}.controls label{display:flex;align-items:center;gap:7px;font-size:14px}.metric-picker{display:flex;gap:5px;overflow:auto;padding:4px 0 8px;max-height:90px;flex-wrap:wrap}.metric-picker label{display:flex;gap:6px;align-items:center;min-height:40px;background:#112438;border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:13px}.metric-picker input{width:20px;height:20px;accent-color:var(--accent)}.history-message{font-size:14px;min-height:22px;margin:4px 0 8px}.chart{min-height:160px;overflow:auto}.chart svg{display:block;width:100%;height:auto}.footnote{font-size:12px;color:var(--muted);line-height:1.45;margin:8px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.module strong{display:block;margin-bottom:7px}.module p{margin:5px 0;font-size:13px;color:var(--muted)}.system-row{display:flex;justify-content:space-between;gap:15px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}.system-row span:first-child{color:var(--muted)}.message{line-height:1.5;font-size:15px}.notice{padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px}.notice.warn{border-color:#755933}nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}nav button{font-size:14px;padding:8px 4px}nav button[aria-current="page"]{color:var(--accent);border-color:var(--accent);background:#12304a}@media(max-width:600px){.gauges{grid-template-columns:repeat(2,minmax(0,1fr))}.gauge{min-height:115px;padding:9px}.reading{font-size:34px}.grid{grid-template-columns:1fr}h1{font-size:17px}.scanner{font-size:11px}.shell{padding:5px;gap:5px}nav{gap:3px}nav button{font-size:12px}.state{font-size:11px}}@media(min-height:650px){.gauge{padding:22px}.reading{font-size:62px}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header><h1>SPRINTER <span class="label">MONITOR</span></h1><div id="scanner" class="scanner" role="status">Connecting to scanner…</div></header>
+<main>
+<section id="dashboard" class="page dashboard"><div id="states" class="states" aria-live="polite"></div><div id="gauges" class="gauges"></div></section>
+<section id="trends" class="page" hidden>
+<div class="controls"><label>Module <select id="historyModule"></select></label><label>Range <select id="historyRange"><option value="1h">Last hour</option><option value="24h" selected>Last 24 hours</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="all">All retained</option></select></label><button id="refreshHistory">Refresh</button><button id="exportCsv" disabled>CSV</button></div>
+<div id="metrics" class="metric-picker" aria-label="Compare up to eight saved measurements"></div>
+<div id="historyMessage" class="history-message" role="status">Select measurements to load saved SD records.</div><div id="chart" class="chart"></div>
+<p class="footnote">Saved SD records only. Recent recording is adaptive: at least 10 seconds between changed values; unchanged values may be recorded 30 minutes apart. Older records show min/average/max summaries. Gaps are not filled.</p>
+</section>
+<section id="alerts" class="page" hidden><h2>Alerts and data availability</h2><div id="issues" class="message"></div><p class="footnote">Vehicle alert rules and persistent alert history are not available in this firmware. Missing readings do not establish vehicle health. View verified faults in the <a href="/">diagnostic WebUI</a>.</p></section>
+<section id="modules" class="page" hidden><h2>Modules</h2><div id="moduleCards" class="grid"></div><p class="footnote">Viewing a module does not connect to it or change the diagnostic session. A module without a successful scan has unknown fault status.</p></section>
+<section id="system" class="page" hidden><h2>System</h2><div id="systemRows" class="panel"></div><p class="footnote">This display is read-only. Logging and diagnostic sessions are controlled by the ESP32. Absolute time cannot survive power loss without resynchronization or a battery-backed clock.</p></section>
+</main>
+<nav aria-label="Dashboard sections"><button data-page="dashboard" aria-current="page">Dashboard</button><button data-page="trends">Trends</button><button data-page="alerts">Alerts</button><button data-page="modules">Modules</button><button data-page="system">System</button></nav>
+</div>
+<script src="/t1n-data.js"></script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const escapeText=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const client=T1NData.createClient();
+const state={snapshot:null,receivedMs:0,online:false,scannerError:'',health:null,healthError:'',healthAt:0,modules:[],page:'dashboard',historyModule:0,range:'24h',selected:new Set(['rail','railTarget']),series:[],historyToken:0,historyBusy:false,historyAt:0};
+const gaugeIds=['rpm','coolant','battery','rail','boost','speed'];
+function metadata(moduleId){return T1NData.metricCatalog?.[moduleId]||[];}
+function moduleName(id){return state.modules.find(m=>m.id===id)?.name||['Engine CR2','ABS','EGS transmission','HVAC','EWM','Instrument cluster'][id]||String(id);}
+function sensor(id){return state.online&&state.snapshot?.sensors?.moduleId===0?state.snapshot.sensors.items.find(s=>s.id===id):null;}
+function isFresh(item){return state.online&&T1NData.sensorFresh(item,state.receivedMs,Date.now())&&String(item.value).trim()!==''&&Number.isFinite(Number(item.value));}
+function freshEngine(){return gaugeIds.some(id=>isFresh(sensor(id)));}
+function healthState(){
+ const h=state.health;
+ return {historyAvailable:state.online&&!!h?.history?.available&&h.history.storage==='microSD'&&!h.history.error,
+ storageHealthy:state.online&&!!h?.sd?.mounted&&!h.sd.error&&!h.history?.error,
+ clockValid:state.online&&!!h?.history?.clock?.valid,
+ monitorEnabled:state.online&&h?.monitor?.enabled===true};
+}
+function statusPill(label,value,level){return '<span class="state '+level+'">'+escapeText(label+': '+value)+'</span>';}
+function displayNumber(value){const n=Number(value);return Number.isFinite(n)&&String(value).trim()!==''?n.toLocaleString(undefined,{maximumFractionDigits:1}):'—';}
+function renderLive(){
+ const s=state.snapshot?.status,h=healthState();
+ $('scanner').textContent=state.online?'Scanner online · '+(s?.firmware||'firmware unknown'):'Scanner unavailable · '+(state.scannerError||'connecting');
+ $('scanner').className='scanner '+(state.online?'ok':'bad');
+ $('states').innerHTML=statusPill('ECU',state.online?(s?.connected?'connected':'disconnected'):'unknown',state.online&&s?.connected?'ok':'warn')+
+ statusPill('Monitoring',state.online&&state.health?(h.monitorEnabled?'enabled':'paused'):'unknown',h.monitorEnabled?'ok':'warn')+
+ statusPill('Engine data',freshEngine()?'fresh':'unavailable / stale',freshEngine()?'ok':'warn')+
+ statusPill('SD history',h.historyAvailable?'available':'unavailable',h.historyAvailable?'ok':'warn')+
+ statusPill('Storage',h.storageHealthy?'healthy':'unavailable / error',h.storageHealthy?'ok':'warn')+
+ statusPill('Clock',h.clockValid?'valid':'unknown',h.clockValid?'ok':'warn');
+ $('gauges').innerHTML=gaugeIds.map(id=>{
+  const item=sensor(id),meta=metadata(0).find(m=>m.id===id),fresh=isFresh(item);
+  let detail=!state.online?'Scanner unavailable':!item?'No current engine reading':!fresh?'Stale / invalid reading':Math.max(0,Math.floor((Number(item.ageMs)+Date.now()-state.receivedMs)/1000))+' seconds old';
+  const spec=T1NData.pairSpecs?.[id];
+  if(spec&&fresh){const target=sensor(spec.target),delta=T1NData.pairDelta(item,target,{receivedMs:state.receivedMs,nowMs:Date.now()});detail=delta.valid?'Target '+displayNumber(target.value)+' · Δ '+displayNumber(delta.value)+' '+delta.unit:'Target / difference unavailable';}
+  return '<article class="gauge '+(fresh?'':'stale')+'"><div class="label">'+escapeText(item?.label||meta?.label||id)+'</div><div class="reading">'+(fresh?escapeText(displayNumber(item.value)):'—')+'<span class="unit">'+escapeText(item?.unit||meta?.unit||'')+'</span></div><div class="detail">'+escapeText(detail)+'</div></article>';
+ }).join('');
+ renderIssues();renderSystem();renderModules();
+}
+function renderIssues(){
+ const issues=[],h=healthState();
+ if(!state.online)issues.push('Scanner connection unavailable: '+(state.scannerError||'waiting for response'));
+ if(state.online&&!state.snapshot?.status?.connected)issues.push('No current diagnostic session. Saved SD history can still be viewed.');
+ if(state.snapshot?.sensorsError)issues.push('Live sensor data unavailable: '+state.snapshot.sensorsError);
+ if(!freshEngine())issues.push('Fresh engine measurements are unavailable. Vehicle condition is unknown.');
+ if(state.healthError)issues.push('System status unavailable: '+state.healthError);
+ if(state.online&&!h.historyAvailable)issues.push('Persistent history unavailable: '+(state.health?.history?.error||'SD history not ready'));
+ if(state.online&&!h.storageHealthy)issues.push('Storage not confirmed healthy: '+(state.health?.sd?.error||state.health?.history?.error||'not mounted'));
+ if(state.online&&!h.clockValid)issues.push('Absolute clock is unknown. New measurements cannot be reliably dated.');
+ if(state.health?.monitor?.error)issues.push('Monitor: '+state.health.monitor.error);
+ if(state.snapshot?.status?.error)issues.push('Diagnostics: '+state.snapshot.status.error);
+ $('issues').innerHTML=issues.length?issues.map(text=>'<div class="notice warn">'+escapeText(text)+'</div>').join(''):'<div class="notice">No scanner or storage errors reported. Vehicle alert evaluation is unavailable.</div>';
+}
+function renderSystem(){
+ const h=state.health,s=state.snapshot?.status,online=state.online;
+ const rows=[['Scanner',online?'Online':'Unavailable'],['Firmware',online?s?.firmware||'Unknown':'Unknown'],['Diagnostic connection',online?(s?.connected?moduleName(s.moduleId)+' connected':'Disconnected'):'Unknown'],['Diagnostic status',online?s?.status||'Unknown':'Unknown'],['Automatic monitoring',online&&h?(h.monitor.enabled?'Enabled':'Paused'):'Unknown'],['SD mount',online&&h?(h.sd.mounted?'Mounted':'Unavailable'):'Unknown'],['SD capacity / used',online&&h?.sd?.mounted?h.sd.capacityMiB+' / '+h.sd.usedMiB+' MiB':'Unknown'],['History backend',online?h?.history?.storage||'Unavailable':'Unknown'],['History writes / errors',online&&h?h.history.successfulWrites+' / '+h.history.writeErrors:'Unknown'],['Clock source',online&&h?.history?.clock?.valid?h.history.clock.source:'Unknown'],['Clock changes',online?h?.history?.clock?.jumps??'Unknown':'Unknown'],['Status error',state.healthError||h?.history?.error||h?.sd?.error||'None reported']];
+ $('systemRows').innerHTML=rows.map(([label,value])=>'<div class="system-row"><span>'+escapeText(label)+'</span><span>'+escapeText(value)+'</span></div>').join('');
+}
+function renderModules(){
+ $('moduleCards').innerHTML=state.modules.length?state.modules.map(m=>{
+  const mon=state.health?.monitor?.modules?.find(v=>v.id===m.id),connected=state.online&&state.snapshot?.status?.connected&&state.snapshot.status.moduleId===m.id;
+  return '<article class="panel module"><strong>'+escapeText(m.name)+'</strong><div class="'+(connected?'ok':'label')+'">'+(connected?'Current diagnostic session':state.online?'No current session':'Scanner unavailable')+'</div><p>OBD pin '+escapeText(m.obdPin)+' · '+escapeText(m.address)+'</p><p>Connections / failures: '+(state.online&&mon?escapeText(mon.connects+' / '+mon.failures):'Unknown')+'</p><p>Saved writes this boot: '+(state.online&&mon?escapeText(mon.historyWrites):'Unknown')+'</p><p>DTC status: '+(mon?.dtcSupported?(mon.dtcBaseline?'Baseline established; view diagnostic WebUI':'Unknown; no baseline'):'Not verified / unsupported')+'</p></article>';
+ }).join(''):'<div class="panel">Module catalog unavailable.</div>';
+}
+function renderMetricPicker(){
+ const selected=state.selected;
+ $('metrics').innerHTML=metadata(state.historyModule).map(m=>'<label><input type="checkbox" data-metric="'+escapeText(m.id)+'" '+(selected.has(m.id)?'checked':'')+'>'+escapeText(m.label)+(m.unit?' ('+escapeText(m.unit)+')':'')+'</label>').join('');
+}
+async function loadHistory(){
+ const token=++state.historyToken,module=state.historyModule,range=state.range,ids=[...state.selected];
+ state.series=[];state.historyBusy=true;state.historyAt=Date.now();$('chart').innerHTML='';$('exportCsv').disabled=true;$('historyMessage').className='history-message';$('historyMessage').textContent=ids.length?'Loading saved SD measurements…':'Select up to eight measurements.';
+ try{
+  const series=[];let truncated=false;
+  for(const id of ids){
+   if(token!==state.historyToken)return;
+   const result=await client.history({module,id,range,force:true});
+   if(token!==state.historyToken)return;
+   truncated=truncated||result.truncated;
+   const meta=metadata(module).find(m=>m.id===id)||{label:id,unit:''};
+   series.push({module,id,label:result.label||meta.label,unit:result.unit||meta.unit,points:result.points});
+  }
+  if(token!==state.historyToken)return;
+  state.series=series;state.historyAt=Date.now();
+  const count=series.reduce((n,s)=>n+s.points.length,0);
+  $('historyMessage').textContent=count?count+' saved records · source timestamps in UTC'+(truncated?' · response limited; choose a shorter range':''):'No saved records for this selection.';
+  $('chart').innerHTML=count?T1NData.renderHistorySvg(series,{width:900,height:300}):'';
+  $('exportCsv').disabled=!count;
+ }catch(error){
+  if(token!==state.historyToken)return;
+  state.series=[];$('chart').innerHTML='';$('exportCsv').disabled=true;
+  $('historyMessage').className='history-message warn';$('historyMessage').textContent='SD history unavailable: '+error.message;
+ }finally{if(token===state.historyToken)state.historyBusy=false;}
+}
+function navigate(page){
+ state.page=page;
+ document.querySelectorAll('.page').forEach(section=>section.hidden=section.id!==page);
+ document.querySelectorAll('[data-page]').forEach(button=>button.setAttribute('aria-current',button.dataset.page===page?'page':'false'));
+ if(page==='trends')loadHistory();
+}
+async function refreshHealth(){
+ const health={};
+ try{
+  health.history=await client.historyStatus();health.sd=await client.request('/api/sd/status');health.monitor=await client.request('/api/monitor/status');
+  state.health=health;state.healthError='';
+  if(!state.modules.length){const catalog=await client.request('/api/modules');state.modules=catalog.modules||[];$('historyModule').innerHTML=state.modules.map(m=>'<option value="'+m.id+'">'+escapeText(m.name)+'</option>').join('');$('historyModule').value=String(state.historyModule);}
+ }catch(error){state.health=null;state.healthError=error.message;}
+ state.healthAt=Date.now();
+}
+async function poll(){
+ try{state.snapshot=await client.snapshot();state.receivedMs=state.snapshot.receivedMs??Date.now();state.online=true;state.scannerError='';}
+ catch(error){state.snapshot=null;state.online=false;state.health=null;state.healthAt=0;state.scannerError=error.message;}
+ renderLive();
+ if(state.online&&Date.now()-state.healthAt>20000){await refreshHealth();renderLive();}
+ if(state.page==='trends'&&!state.historyBusy&&Date.now()-state.historyAt>60000)loadHistory();
+ setTimeout(poll,state.online?3000:5000);
+}
+function initialize(){
+ renderMetricPicker();renderLive();
+ document.querySelectorAll('[data-page]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.page)));
+ $('historyModule').addEventListener('change',()=>{state.historyModule=Number($('historyModule').value);const choices=metadata(state.historyModule);state.selected=new Set(choices.slice(0,2).map(m=>m.id));renderMetricPicker();loadHistory();});
+ $('historyRange').addEventListener('change',()=>{state.range=$('historyRange').value;loadHistory();});
+ $('metrics').addEventListener('change',event=>{const input=event.target;if(!input.dataset.metric)return;if(input.checked&&state.selected.size>=8){input.checked=false;$('historyMessage').textContent='Select at most eight measurements.';return;}if(input.checked)state.selected.add(input.dataset.metric);else state.selected.delete(input.dataset.metric);loadHistory();});
+ $('refreshHistory').addEventListener('click',loadHistory);
+ $('exportCsv').addEventListener('click',()=>{if(!state.series.length)return;const blob=new Blob([T1NData.exportCsv(state.series)],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='sprinter-sd-history.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+ setInterval(renderLive,1000);poll();
+}
+initialize();
+</script>
+</body></html>

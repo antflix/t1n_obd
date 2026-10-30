@@ -14,7 +14,7 @@ import urllib.request
 import uuid
 import zipfile
 
-FILES = ("www/index.html", "www/advanced.html", "www/manifest.json")
+FILES = ("www/index.html", "www/advanced.html", "www/pi.html", "www/manifest.json")
 
 
 def request(base, path, data=None, headers=None, timeout=25):
@@ -68,7 +68,7 @@ def main():
     manifest = json.loads(contents["www/manifest.json"])
     if manifest.get("version") != status.get("firmware"):
         raise SystemExit("SD assets version differs from running firmware; refusing mismatched upload.")
-    for name in FILES[:2]:
+    for name in FILES[:-1]:
         actual = hashlib.sha256(contents[name]).hexdigest()
         assert manifest["sha256"][name] == actual, "Bundle checksum invalid for " + name
 

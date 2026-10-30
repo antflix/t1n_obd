@@ -16,7 +16,7 @@ static size_t sdUploadBytes=0;
 static bool sdUploadComplete=false;
 
 bool sdAllowedName(const String &name) {
-  return name=="index.html"||name=="advanced.html"||name=="manifest.json";
+  return name=="index.html"||name=="advanced.html"||name=="pi.html"||name=="manifest.json";
 }
 void sdInitialize() {
   // K-line pins are deliberately excluded from the custom SPI routing.
@@ -39,9 +39,9 @@ String sdStatusJson() {
       +",\"capacityMiB\":"+String((unsigned long)(SD.totalBytes()/1048576ULL))
       +",\"usedMiB\":"+String((unsigned long)(SD.usedBytes()/1048576ULL));
   }
-  const char* names[]={"index.html","advanced.html","manifest.json"};
+  const char* names[]={"index.html","advanced.html","pi.html","manifest.json"};
   out+=",\"files\":[";
-  for(int i=0;i<3;i++){
+  for(int i=0;i<4;i++){
     if(i)out+=",";
     String name=names[i],path="/www/"+name;
     File file=sdReady?SD.open(path,FILE_READ):File();
@@ -51,8 +51,19 @@ String sdStatusJson() {
   }
   return out+"]}";
 }
-bool sdServePage(const char*path) {
+bool sdUiReady(){
   if(!sdReady)return false;
+  File manifest=SD.open("/www/manifest.json",FILE_READ);
+  if(!manifest||manifest.size()>4096){if(manifest)manifest.close();return false;}
+  String body=manifest.readString();manifest.close();
+  int key=body.indexOf("\"version\"");
+  int colon=key<0?-1:body.indexOf(':',key+9);
+  int quote=colon<0?-1:body.indexOf('"',colon+1);
+  int end=quote<0?-1:body.indexOf('"',quote+1);
+  return end>quote&&body.substring(quote+1,end)==FIRMWARE_VERSION;
+}
+bool sdServePage(const char*path) {
+  if(!sdUiReady())return false;
   File f=SD.open(path,FILE_READ);
   if(!f||f.isDirectory()){if(f)f.close();return false;}
   web.sendHeader("Cache-Control","no-store");

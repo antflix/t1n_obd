@@ -354,15 +354,11 @@ String engineHealth(const char*id,const ValueState&v){
   if(k=="lowFuel"&&engLowFuelMin.valid){if(v.value<engLowFuelMin.value)return"bad";return"ok";}
   return"neutral";
 }
-String valueJson(const char*id,const char*label,const ValueState&v){
-  String expected=activeModule==MOD_ENGINE?engineExpected(id):"";
-  String state=activeModule==MOD_ENGINE?engineHealth(id,v):(stale(v)?"stale":"neutral");
-  return"{\"id\":\""+String(id)+"\",\"label\":\""+String(label)+"\",\"value\":\""+jsonEscape(v.text)+"\",\"unit\":\""+jsonEscape(v.unit)+"\",\"valid\":"+String(v.valid?1:0)+",\"sampleMs\":"+String(v.updatedMs)+",\"ageMs\":"+String(v.valid?(uint32_t)(millis()-v.updatedMs):0)+",\"stale\":"+String(stale(v)?1:0)+",\"state\":\""+state+"\",\"expected\":\""+jsonEscape(expected)+"\"}";
-}
 void historyObserve(const char *id,const ValueState &v);
-String sensorsJson(bool captureOnly=false){
-  String s=captureOnly?String(""):("{\"module\":\""+jsonEscape(moduleName(activeModule))+"\",\"items\":[");bool first=true;
-  auto add=[&](const char*id,const char*label,const ValueState&v){if(captureOnly){historyObserve(id,v);return;}if(!first)s+=",";first=false;s+=valueJson(id,label,v);};
+#include "bounded_json.h"
+// One sensor catalogue supplies both the SD logger and the live API.
+// Neither browser requests nor JSON rendering create historical observations.
+template <typename Add> void forEachSensor(Add add){
   if(activeModule==MOD_ENGINE){
     add("rpm","Engine RPM",engRpm);add("speed","Vehicle speed",engSpeed);add("coolant","Coolant temperature",engCoolant);add("oilTemp","Engine oil temperature",engOilTemp);add("battery","Battery voltage",engBattery);add("lowFuel","Low-side fuel pressure",engLowFuel);
     add("boost","Boost / MAP actual",engBoost);add("boostTarget","Boost target",engBoostTarget);add("rail","Rail pressure actual",engRail);add("railTarget","Rail pressure target",engRailTarget);
@@ -417,6 +413,34 @@ String sensorsJson(bool captureOnly=false){
       }
     }
   }
-  if(!captureOnly)s+="]}";return s;
+}
+void historyObserveSensors(){
+  forEachSensor([](const char *id,const char *,const ValueState &v){historyObserve(id,v);});
+}
+void sensorHttpSink(const char *data,size_t length,void*){web.sendContent(data,length);}
+void sensorsSend(){
+  web.sendHeader("Cache-Control","no-store");
+  web.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  web.send(200,"application/json","");
+  BoundedJson out(sensorHttpSink);
+  out.raw("{\"module\":");out.string(moduleName(activeModule).c_str());
+  out.raw(",\"moduleId\":");out.integer((uint8_t)activeModule);
+  out.raw(",\"uptimeMs\":");out.integer(millis());out.raw(",\"items\":[");
+  bool first=true;
+  forEachSensor([&](const char *id,const char *label,const ValueState &v){
+    if(!first)out.raw(",");first=false;
+    out.raw("{\"id\":");out.string(id);out.raw(",\"label\":");out.string(label);
+    out.raw(",\"value\":");out.string(v.text.c_str());out.raw(",\"unit\":");out.string(v.unit.c_str());
+    out.raw(",\"valid\":");out.integer(v.valid?1:0);
+    out.raw(",\"sampleMs\":");out.integer(v.updatedMs);
+    out.raw(",\"ageMs\":");out.integer(v.valid?(uint32_t)(millis()-v.updatedMs):0);
+    out.raw(",\"stale\":");out.integer(stale(v)?1:0);
+    out.raw(",\"state\":");
+    String state=activeModule==MOD_ENGINE?engineHealth(id,v):String(stale(v)?"stale":"neutral");
+    out.string(state.c_str());out.raw(",\"expected\":");
+    String expected=activeModule==MOD_ENGINE?engineExpected(id):String("");
+    out.string(expected.c_str());out.raw("}");
+  });
+  out.raw("]}");out.flush();web.sendContent("");
 }
 String moduleStatusJson(){String s="{";s+="\"firmware\":\""+String(FIRMWARE_VERSION)+"\",";s+="\"module\":\""+jsonEscape(moduleName(activeModule))+"\",";s+="\"moduleId\":"+String((int)activeModule)+",";s+="\"address\":\"0x"+hex2(activeEcuAddr)+"\",";s+="\"obdPin\":"+String(moduleObdPin(activeModule))+",";int ri=relayIndexForModule(activeModule);s+="\"relay\":"+String(ri>=0?ri+1:0)+",";s+="\"relayGpio\":"+String(ri>=0?RX_PIN:255)+",";s+="\"connected\":"+String(diagnosticSession?1:0)+",";s+="\"polling\":"+String(livePolling?1:0)+",";s+="\"busy\":"+String(busy?1:0)+",";s+="\"status\":\""+jsonEscape(scannerStatus)+"\",";s+="\"error\":\""+jsonEscape(lastError)+"\",";s+="\"variant\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantId:activeModule==MOD_ABS?(absKm20?"ABSR_5_7_KM20":"Unknown"):"")+"\",";s+="\"variantRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantRaw:activeModule==MOD_ABS?absPartId:"")+"\",";s+="\"identRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsIdentRaw:"")+"\",";s+="\"wifi\":\""+jsonEscape(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():WiFi.softAPIP().toString())+"\"";s+="}";return s;}

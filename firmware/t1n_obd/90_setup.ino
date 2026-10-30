@@ -73,7 +73,16 @@ String wifiPage(){
 #include "advanced_ui_gzip_generated.h"
 #endif
 
+#include "shared_client_generated.h"
 void setupRoutes(){
+web.on("/t1n-data.js",HTTP_GET,[]{
+  web.sendHeader("Cache-Control","no-store");
+  web.send_P(200,"application/javascript; charset=utf-8",T1N_SHARED_CLIENT);
+});
+web.on("/pi",HTTP_GET,[]{
+  if(sdServePage("/www/pi.html"))return;
+  web.send(503,"text/html; charset=utf-8","<!doctype html><meta name=viewport content=width=device-width><title>T1N display unavailable</title><h2>Pi display unavailable</h2><p>Mount the microSD card and install the matching dashboard files.</p><p><a href='/'>Open scanner</a></p><script>setTimeout(()=>location.reload(),10000)</script>");
+});
 web.on("/api/sd/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",sdStatusJson());});
 web.on("/api/sd/test",HTTP_POST,[]{String msg;bool ok=sdTestCard(msg);web.send(ok?200:409,"text/plain",msg);});
 web.on("/api/sd/upload",HTTP_POST,sdUploadFinish,sdUploadChunk);
@@ -156,23 +165,25 @@ web.on("/advanced",HTTP_GET,[]{if(sdServePage("/www/advanced.html"))return;web.s
 });
 web.on("/update",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store, no-cache, must-revalidate");web.sendHeader("Pragma","no-cache");web.send(200,"text/html; charset=utf-8",updatePage());});
 web.on("/api/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",moduleStatusJson());});
-web.on("/api/sensors",HTTP_GET,[]{web.send(200,"application/json",sensorsJson());});
+web.on("/api/sensors",HTTP_GET,[]{sensorsSend();});
 web.on("/api/history/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",historyStatusJson());});
 web.on("/api/history/data",HTTP_GET,[]{
-  int module=web.arg("module").toInt();
-  String range=web.arg("range");if(range!="1h"&&range!="24h"&&range!="7d"&&range!="30d"&&range!="all")range="24h";
   web.sendHeader("Cache-Control","no-store");
-  web.send(200,"application/json",historyDataJson((uint8_t)module,web.arg("id"),range));
+  String module=web.arg("module");
+  if(module.length()!=1||module[0]<'0'||module[0]>'5'){
+    web.send(400,"application/json","{\"ok\":false,\"code\":\"INVALID_MODULE\",\"error\":\"Module must be 0 through 5\",\"points\":[]}");return;
+  }
+  historyDataSend((uint8_t)(module[0]-'0'),web.arg("id"),web.arg("range"));
 });
 web.on("/api/history/clock",HTTP_POST,[]{
   String epoch=web.arg("epoch");
-  if(epoch.length()<10||epoch.length()>12){web.send(400,"text/plain","Invalid UTC time");return;}
-  char *end=nullptr;unsigned long value=strtoul(epoch.c_str(),&end,10);
-  if(!end||*end||!historySetClock((uint32_t)value)){web.send(400,"text/plain","Invalid UTC time");return;}
+  if(epoch.length()<10||epoch.length()>10){web.send(400,"text/plain","Invalid UTC time");return;}
+  char *end=nullptr;unsigned long long value=strtoull(epoch.c_str(),&end,10);
+  if(!end||*end||value>UINT32_MAX||!historySetClock((uint32_t)value)){web.send(400,"text/plain","Invalid UTC time");return;}
   web.send(200,"text/plain","Clock synchronized");
 });
 
-web.on("/sensors",HTTP_GET,[]{web.send(200,"application/json",sensorsJson());});
+web.on("/sensors",HTTP_GET,[]{sensorsSend();});
 web.on("/api/dtc",HTTP_GET,[]{web.send(200,"text/plain",dtcText);});
 web.on("/api/activity-log",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/plain; charset=utf-8",activityLogText);});
 web.on("/api/activity-log.txt",HTTP_GET,[]{web.sendHeader("Content-Disposition","attachment; filename=t1n_scanner_activity_log.txt");web.send(200,"text/plain; charset=utf-8",activityLogText);});
@@ -184,7 +195,6 @@ web.on("/api/shared-probe/run",HTTP_POST,[]{if(busy||jobConnect||diagnosticSessi
 #ifdef T1N_ENABLE_PIN15_TIMING_LAB
 web.on("/api/shared-probe/timing",HTTP_POST,[]{if(busy||jobConnect||diagnosticSession){web.send(409,"text/plain","Disconnect scanner first");return;}int fa=web.hasArg("fall")?web.arg("fall").toInt():11;int ra=web.hasArg("rise")?web.arg("rise").toInt():75;int addr=web.hasArg("address")?strtol(web.arg("address").c_str(),nullptr,0):0x50;if((addr!=0x50&&addr!=0x69)||fa<0||fa>30||ra<0||ra>85){web.send(400,"text/plain","Invalid timing or address");return;}web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",runPin15TimingTest(fa,ra,(uint8_t)addr));});
 #endif
-web.on("/api/module/select",HTTP_POST,[]{if(busy||jobConnect){web.send(409,"text/plain","Scanner is busy");return;}int id=web.arg("id").toInt();if(id<0||id>5){web.send(400,"text/plain","Unknown module");return;}monitorManualOverride();autoReconnect=false;reconnectAtMs=0;if(diagnosticSession)disconnectCurrentModule();requestedModule=(ModuleId)id;activeModule=requestedModule;activeEcuAddr=moduleAddr(activeModule);dtcText=activeModule==MOD_ABS?"ABS DTC read request is not verified yet.":"No DTC read yet.";activity("User selected "+moduleName(activeModule)+"; waiting for Connect");setStatus("DISCONNECTED - "+moduleName(activeModule)+" SELECTED");web.send(200,"text/plain","Module selected");});
 web.on("/api/module/connect",HTTP_POST,[]{if(busy||jobConnect){web.send(409,"text/plain","Scanner is busy");return;}int id=web.arg("id").toInt();if(id<0||id>5){web.send(400,"text/plain","Unknown module");return;}monitorManualOverride();autoReconnect=true;requestedModule=(ModuleId)id;activity("User requested connection to "+moduleName(requestedModule));if(diagnosticSession)disconnectCurrentModule();activeModule=requestedModule;activeEcuAddr=moduleAddr(activeModule);dtcText=activeModule==MOD_ABS?"ABS DTC read request is not verified yet.":"No DTC read yet.";setStatus("CONNECT QUEUED - "+moduleName(activeModule));jobConnect=true;web.send(202,"text/plain","Connection queued");});
 web.on("/api/hzr/fan/status",HTTP_POST,[]{if(activeModule!=MOD_HZR||!diagnosticSession||busy){web.send(409,"text/plain","Connect HVAC / HZRKL first");return;}String out;bool ok=hzrFanRead(out);web.send(ok?200:500,"text/plain",out);});
  web.on("/api/hzr/fan/on",HTTP_POST,[]{if(activeModule!=MOD_HZR||!diagnosticSession||busy){web.send(409,"text/plain","Connect HVAC / HZRKL first");return;}String out;bool ok=hzrFanStart(out);web.send(ok?200:500,"text/plain",out);});
@@ -223,7 +233,7 @@ if(wifiSSID.length()){
 // Always bring up the recovery AP, regardless of station success.
 WiFi.mode(WIFI_AP_STA);WiFi.softAP(apSSID.c_str(),apPASS.c_str());
 sdInitialize();historyBegin();monitorBegin();setupRoutes();web.begin();activity("T1N Scanner "+String(FIRMWARE_VERSION)+" booted");logx(String("T1N Scanner ")+FIRMWARE_VERSION+" ready");logx(String("AP http://")+WiFi.softAPIP().toString()+" | station "+(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():String("not connected")));setStatus("DISCONNECTED - SELECT MODULE");}
-void loop(){web.handleClient();hzrFanTick();if(jobConnect&&!busy){jobConnect=false;connectModule(requestedModule);}livePollTick();historyTick();monitorTick();if(diagnosticSession&&!busy&&(activeModule==MOD_ENGINE||activeModule==MOD_EGS)&&millis()-lastDtcScanMs>=60000){readDTCs();lastDtcScanMs=millis();}if(diagnosticSession&&activeModule!=MOD_ABS&&!busy&&!livePolling&&millis()-lastGoodTrafficMs>=cfg.keepaliveIntervalMs){busy=true;testerPresent();busy=false;}if(!diagnosticSession&&autoReconnect&&reconnectAtMs&&(int32_t)(millis()-reconnectAtMs)>=0&&!busy&&!jobConnect){reconnectAtMs=0;jobConnect=true;setStatus("AUTO RECONNECT QUEUED - "+moduleName(requestedModule));}if(wifiSSID.length()&&WiFi.status()!=WL_CONNECTED&&millis()-lastWifiRetryMs>90000){
+void loop(){web.handleClient();hzrFanTick();if(jobConnect&&!busy){jobConnect=false;connectModule(requestedModule);}livePollTick();historyTick();historyQueryTick();monitorTick();if(diagnosticSession&&!busy&&(activeModule==MOD_ENGINE||activeModule==MOD_EGS)&&millis()-lastDtcScanMs>=60000){readDTCs();lastDtcScanMs=millis();}if(diagnosticSession&&activeModule!=MOD_ABS&&!busy&&!livePolling&&millis()-lastGoodTrafficMs>=cfg.keepaliveIntervalMs){busy=true;testerPresent();busy=false;}if(!diagnosticSession&&autoReconnect&&reconnectAtMs&&(int32_t)(millis()-reconnectAtMs)>=0&&!busy&&!jobConnect){reconnectAtMs=0;jobConnect=true;setStatus("AUTO RECONNECT QUEUED - "+moduleName(requestedModule));}if(wifiSSID.length()&&WiFi.status()!=WL_CONNECTED&&millis()-lastWifiRetryMs>90000){
  lastWifiRetryMs=millis();wifiConnectAttempts++;
  // Do not forcibly disconnect an already-connecting station every 30 seconds.
  WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
