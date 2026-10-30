@@ -31,6 +31,9 @@ def main():
             except subprocess.TimeoutExpired:child.kill();child.wait()
         child=subprocess.Popen([BROWSER,'--kiosk','--no-first-run','--no-default-browser-check',
             '--noerrdialogs','--disable-session-crashed-bubble','--overscroll-history-navigation=0',
+            # Display-only profile: avoid a locked desktop keyring blocking boot.
+            # Never use this separate, unencrypted profile for saved credentials.
+            '--password-store=basic',
             '--force-device-scale-factor=1','--user-data-dir='+str(PROFILE),url])
     launch(OFFLINE.as_uri())
     try:

@@ -20,6 +20,10 @@ class KioskTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d,patch.object(k,'PROFILE',pathlib.Path(d)),patch.object(k,'reachable',reachable),patch.object(k.subprocess,'Popen',launch),patch.object(k.time,'sleep'),patch.object(k.signal,'signal'):
             with self.assertRaises(KeyboardInterrupt):k.main()
         self.assertEqual(len(calls),3)
+        for args in calls:
+            self.assertIn('--password-store=basic',args)
+            self.assertEqual(sum(a.startswith('--user-data-dir=') for a in args),1)
+            self.assertIn('--kiosk',args)
         self.assertTrue(calls[0][-1].endswith('offline.html'));self.assertEqual(calls[1][-1],k.URL);self.assertEqual(calls[2][-1],k.URL)
         self.assertTrue(all(c.dead for c in children))
     def test_failure_is_not_success(self):
