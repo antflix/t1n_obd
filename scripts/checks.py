@@ -15,6 +15,7 @@ with tempfile.TemporaryDirectory(prefix='t1n-tests-') as d:
         else:run(out)
 run(sys.executable,'scripts/sync_web_assets.py','--check')
 run(sys.executable,'tests/source_safety.py')
+run(sys.executable,'tests/transport_receive.py')
 run(sys.executable,'tests/kiosk_supervisor.py')
 run(sys.executable,'tests/history_merge.py')
 run('node','tests/shared_client.cjs')

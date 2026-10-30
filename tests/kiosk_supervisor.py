@@ -22,6 +22,8 @@ class KioskTest(unittest.TestCase):
         self.assertEqual(len(calls),3)
         for args in calls:
             self.assertIn('--password-store=basic',args)
+            self.assertIn('--ozone-platform=wayland',args)
+            self.assertIn('--disable-gpu',args)
             self.assertEqual(sum(a.startswith('--user-data-dir=') for a in args),1)
             self.assertIn('--kiosk',args)
         self.assertTrue(calls[0][-1].endswith('offline.html'));self.assertEqual(calls[1][-1],k.URL);self.assertEqual(calls[2][-1],k.URL)

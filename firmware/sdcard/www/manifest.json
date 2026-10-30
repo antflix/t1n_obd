@@ -1,5 +1,5 @@
 {
-  "version": "1.10.26-unified-sd-test",
+  "version": "1.10.27-rx-window-test",
   "pinout": {
     "cs": 22,
     "clk": 18,

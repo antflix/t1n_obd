@@ -28,6 +28,8 @@
 #include "sketch_forward.h"
 #define T1N_ENABLE_LEGACY_CR2_REPLAY 1
 #include <esp_system.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <WiFi.h>
 #include <WebServer.h>
 #include <HardwareSerial.h>
@@ -58,7 +60,7 @@ int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.10.26-unified-sd-test";
+static const char* FIRMWARE_VERSION = "1.10.27-rx-window-test";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;

@@ -33,7 +33,9 @@ def main():
             '--noerrdialogs','--disable-session-crashed-bubble','--overscroll-history-navigation=0',
             # Display-only profile: avoid a locked desktop keyring blocking boot.
             # Never use this separate, unencrypted profile for saved credentials.
-            '--password-store=basic',
+            # The deployed Pi 3B EGL path produced a white screen; software
+            # rendering is verified on its existing labwc/DSI configuration.
+            '--password-store=basic','--ozone-platform=wayland','--disable-gpu',
             '--force-device-scale-factor=1','--user-data-dir='+str(PROFILE),url])
     launch(OFFLINE.as_uri())
     try:
