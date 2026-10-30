@@ -3,6 +3,7 @@
 No ECU commands, proxy server, or measurement database. Preserve labwc/touch config.
 """
 import fcntl,os,pathlib,signal,subprocess,time,urllib.request
+from browser_health import browser_ready
 URL=os.environ.get('T1N_SCANNER_URL','http://192.168.8.168/pi')
 HEALTH=URL.rsplit('/',1)[0]+'/api/status'
 PROFILE=pathlib.Path.home()/'.cache/t1n-kiosk-profile'
@@ -19,16 +20,18 @@ def main():
     try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     except BlockingIOError:lock.close();return
     child=None;running=True;was_online=False;showing_remote=False
+    current_url=None;launched_at=0;render_failures=0
     def stop(*_):
         nonlocal running
         running=False
     signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
     def launch(url):
-        nonlocal child
+        nonlocal child,current_url,launched_at,render_failures
         if child and child.poll() is None:
             child.terminate()
             try:child.wait(timeout=5)
             except subprocess.TimeoutExpired:child.kill();child.wait()
+        (PROFILE/'DevToolsActivePort').unlink(missing_ok=True)
         child=subprocess.Popen([BROWSER,'--kiosk','--no-first-run','--no-default-browser-check',
             '--noerrdialogs','--disable-session-crashed-bubble','--overscroll-history-navigation=0',
             # Display-only profile: avoid a locked desktop keyring blocking boot.
@@ -36,7 +39,9 @@ def main():
             # The deployed Pi 3B EGL path produced a white screen; software
             # rendering is verified on its existing labwc/DSI configuration.
             '--password-store=basic','--ozone-platform=wayland','--disable-gpu',
+            '--remote-debugging-address=127.0.0.1','--remote-debugging-port=0',
             '--force-device-scale-factor=1','--user-data-dir='+str(PROFILE),url])
+        current_url=url;launched_at=time.monotonic();render_failures=0
     launch(OFFLINE.as_uri())
     try:
         while running:
@@ -45,6 +50,9 @@ def main():
                 if reachable(URL):launch(URL);showing_remote=True
             if child.poll() is not None:
                 launch(URL if online and showing_remote else OFFLINE.as_uri())
+            elif time.monotonic()-launched_at>=45:
+                render_failures=0 if browser_ready(PROFILE,current_url) else render_failures+1
+                if render_failures>=3:launch(URL if online and showing_remote else OFFLINE.as_uri())
             was_online=online
             # The loaded app handles routine outages. Relaunch once on recovery
             # also recovers Chromium's own network-error page after a startup race.

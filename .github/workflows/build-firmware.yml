@@ -6,9 +6,11 @@ on:
     paths:
       - 'firmware/**'
       - 'tests/**'
+      - 'pi/**'
+      - 'scripts/**'
       - '.github/workflows/build-firmware.yml'
   pull_request:
-    paths: ['firmware/**', 'tests/**', 'scripts/**', '.github/workflows/build-firmware.yml']
+    paths: ['firmware/**', 'tests/**', 'scripts/**', 'pi/**', '.github/workflows/build-firmware.yml']
   workflow_dispatch:
 
 permissions:
