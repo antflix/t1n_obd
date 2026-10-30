@@ -1,17 +1,38 @@
 #if __has_include("wifi_build_config.h")
 #include "wifi_build_config.h"
 #endif
-uint32_t lastDtcScanMs=0,lastWifiRetryMs=0;
+#include "wifi_recovery.h"
+uint32_t lastDtcScanMs=0;
+WifiRecovery wifiRecovery;
 String wifiConfigSource="none";
 // Event callback runs on the Wi-Fi task: only write plain scalar fields here.
 volatile int wifiEventType=0,wifiReason=-1;
 volatile uint32_t wifiLastEventMs=0;
+volatile uint32_t wifiEventSerial=0;
 uint32_t wifiConnectAttempts=0;
 void wifiEventLog(WiFiEvent_t event,WiFiEventInfo_t info){
- wifiLastEventMs=millis();
  if(event==ARDUINO_EVENT_WIFI_STA_CONNECTED){wifiEventType=1;wifiReason=-1;}
  else if(event==ARDUINO_EVENT_WIFI_STA_GOT_IP){wifiEventType=2;wifiReason=-1;}
  else if(event==ARDUINO_EVENT_WIFI_STA_DISCONNECTED){wifiReason=info.wifi_sta_disconnected.reason;wifiEventType=3;}
+ else return;
+ wifiLastEventMs=millis();wifiEventSerial++;
+}
+void wifiTick(){
+ static uint32_t loggedEvent=0;
+ uint32_t event=wifiEventSerial;
+ if(event!=loggedEvent){
+  loggedEvent=event;
+  Serial.printf("[wifi] event=%d reason=%d status=%d uptimeMs=%lu\n",wifiEventType,wifiReason,(int)WiFi.status(),(unsigned long)millis());
+ }
+ WifiRecovery::Action action=wifiRecovery.tick(millis(),WiFi.status()==WL_CONNECTED,wifiSSID.length()>0);
+ if(action==WifiRecovery::Disconnect){
+  WiFi.disconnect(false,false);
+  Serial.printf("[wifi] station retry backoffMs=%lu failures=%u\n",(unsigned long)wifiRecovery.waitMs,wifiRecovery.failures);
+ }else if(action==WifiRecovery::Connect){
+  wifiConnectAttempts++;
+  WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
+  Serial.printf("[wifi] station attempt=%lu\n",(unsigned long)wifiConnectAttempts);
+ }
 }
 String wifiLastEventText(){
  switch(wifiEventType){
@@ -62,6 +83,7 @@ String wifiDiagnosticsJson(){
   s+="\"rssi\":"+String(WiFi.status()==WL_CONNECTED?WiFi.RSSI():0)+",";
   s+="\"passwordConfigured\":"+String(wifiPASS.length()?"true":"false")+",";
   s+="\"passwordLength\":"+String(wifiPASS.length())+",";s+="\"lastEvent\":\""+jsonEscape(wifiLastEventText())+"\",";s+="\"disconnectReason\":"+String(wifiReason)+",";s+="\"disconnectExplanation\":\""+jsonEscape(wifiDisconnectExplanation())+"\",";s+="\"connectAttempts\":"+String(wifiConnectAttempts)+",";s+="\"eventAgeSeconds\":"+String((millis()-wifiLastEventMs)/1000);
+  s+=",\"retryOwner\":\"firmware\",\"retryPhase\":"+String((int)wifiRecovery.phase)+",\"retryFailures\":"+String(wifiRecovery.failures)+",\"nextActionInMs\":"+String(wifiRecovery.nextInMs(millis()))+",\"connectionBudgetMs\":"+String(WifiRecovery::connectionBudgetMs);
   return s+"}";
 }
 String wifiPage(){
@@ -146,9 +168,9 @@ web.on("/wifi/save",HTTP_POST,[]{
   if(!ssid.length()||ssid.length()>32||password.length()<8||password.length()>63){web.send(400,"text/plain","Invalid Wi-Fi network or password length");return;}
   Preferences wp;if(!wp.begin("t1nwifi",false)){web.send(500,"text/plain","Unable to save Wi-Fi settings");return;}
   wp.putString("ssid",ssid);wp.putString("password",password);wp.end();
-  wifiSSID=ssid;wifiPASS=password;wifiConfigSource="Web UI saved settings";lastWifiRetryMs=millis();
+  wifiSSID=ssid;wifiPASS=password;wifiConfigSource="Web UI saved settings";
   web.sendHeader("Location","/wifi",true);web.send(303,"text/plain","Saved; reconnecting");
-  WiFi.disconnect();wifiConnectAttempts++;WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
+  WiFi.disconnect(false,false);wifiRecovery.settingsChanged(millis());
 });
 web.on("/pi",HTTP_GET,[]{if(sdServePage("/www/pi.html"))return;web.send(503,"text/plain","Pi dashboard unavailable on SD card");});
 web.on("/",HTTP_GET,[]{
@@ -249,8 +271,8 @@ web.on("/api/update",HTTP_POST,[]{
 void setup(){Serial.begin(115200);pinMode(RX_PIN,INPUT);loadAllSettings();applyWifiSettings();initRelayRouting();releaseKL();// Connect the station *before* starting SoftAP. A single-radio ESP32 otherwise
 // has to arbitrate channels while authenticating to AntNet.
 WiFi.mode(WIFI_STA);WiFi.setSleep(false);WiFi.onEvent(wifiEventLog);
-WiFi.setAutoReconnect(true);
-lastWifiRetryMs=millis();
+WiFi.setAutoReconnect(false);
+wifiRecovery.started(millis());
 if(wifiSSID.length()){
  wifiConnectAttempts++;WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
  uint32_t t=millis();while(WiFi.status()!=WL_CONNECTED&&millis()-t<12000)delay(100);
@@ -258,8 +280,4 @@ if(wifiSSID.length()){
 // Always bring up the recovery AP, regardless of station success.
 WiFi.mode(WIFI_AP_STA);WiFi.softAP(apSSID.c_str(),apPASS.c_str());
 sdInitialize();historyBegin();monitorBegin();alertsBegin();setupRoutes();web.begin();activity("T1N Scanner "+String(FIRMWARE_VERSION)+" booted");activity("Boot reset reason code "+String((int)esp_reset_reason()));logx(String("T1N Scanner ")+FIRMWARE_VERSION+" ready");logx(String("AP http://")+WiFi.softAPIP().toString()+" | station "+(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():String("not connected")));setStatus("DISCONNECTED - SELECT MODULE");}
-void loop(){web.handleClient();hzrFanTick();if(jobConnect&&!busy){jobConnect=false;connectModule(requestedModule);}livePollTick();historyQueryTick();historyTick();monitorTick();alertsTick();if(diagnosticSession&&!busy&&(activeModule==MOD_ENGINE||activeModule==MOD_EGS)&&millis()-lastDtcScanMs>=60000){readDTCs();lastDtcScanMs=millis();}if(diagnosticSession&&activeModule!=MOD_ABS&&!busy&&!livePolling&&millis()-lastGoodTrafficMs>=cfg.keepaliveIntervalMs){busy=true;testerPresent();busy=false;}if(!diagnosticSession&&autoReconnect&&reconnectAtMs&&(int32_t)(millis()-reconnectAtMs)>=0&&!busy&&!jobConnect){reconnectAtMs=0;jobConnect=true;setStatus("AUTO RECONNECT QUEUED - "+moduleName(requestedModule));}if(wifiSSID.length()&&WiFi.status()!=WL_CONNECTED&&millis()-lastWifiRetryMs>90000){
- lastWifiRetryMs=millis();wifiConnectAttempts++;
- // Do not forcibly disconnect an already-connecting station every 30 seconds.
- WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str());
-}delay(2);}
+void loop(){web.handleClient();hzrFanTick();if(jobConnect&&!busy){jobConnect=false;connectModule(requestedModule);}livePollTick();historyQueryTick();historyTick();monitorTick();alertsTick();if(diagnosticSession&&!busy&&(activeModule==MOD_ENGINE||activeModule==MOD_EGS)&&millis()-lastDtcScanMs>=60000){readDTCs();lastDtcScanMs=millis();}if(diagnosticSession&&activeModule!=MOD_ABS&&!busy&&!livePolling&&millis()-lastGoodTrafficMs>=cfg.keepaliveIntervalMs){busy=true;testerPresent();busy=false;}if(!diagnosticSession&&autoReconnect&&reconnectAtMs&&(int32_t)(millis()-reconnectAtMs)>=0&&!busy&&!jobConnect){reconnectAtMs=0;jobConnect=true;setStatus("AUTO RECONNECT QUEUED - "+moduleName(requestedModule));}wifiTick();delay(2);}

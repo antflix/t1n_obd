@@ -34,3 +34,10 @@ print('Actual bounded diagnostic log remains within capacity after 5000 appends 
 
 assert (R/'firmware/sdcard/pi.html').read_bytes()==(R/'firmware/sdcard/www/pi.html').read_bytes()
 print('Legacy Pi source path matches the canonical SD page PASS')
+
+assert 'WiFi.setAutoReconnect(false);' in s and 'WiFi.setAutoReconnect(true)' not in s
+assert 'lastWifiRetryMs' not in s
+assert s.count('WiFi.begin(wifiSSID.c_str(),wifiPASS.c_str())')==2
+assert s.count('WiFi.disconnect(false,false)')==2
+assert 'wifiRecovery.settingsChanged(millis())' in s and 'wifiTick();delay(2)' in s
+print('Single Wi-Fi retry owner, AP-preserving disconnect and deferred settings reconnect PASS')
