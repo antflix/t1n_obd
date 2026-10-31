@@ -12,7 +12,7 @@ def assets():
         contents['www/'+name]=match[1].encode()
     contents['www/pi.html']=(ROOT/'firmware/sdcard/pi.html').read_bytes()
     version=re.search(r'FIRMWARE_VERSION\s*=\s*"([^"]+)"',(ROOT/'firmware/t1n_obd/t1n_obd.ino').read_text())[1]
-    manifest={'version':version,'historySchema':2,'pinout':{'cs':22,'clk':18,'miso':19,'mosi':17},
+    manifest={'version':version,'historySchema':1,'pinout':{'cs':22,'clk':18,'miso':19,'mosi':17},
               'sha256':{name:hashlib.sha256(data).hexdigest() for name,data in sorted(contents.items())}}
     contents['www/manifest.json']=(json.dumps(manifest,indent=2)+'\n').encode()
     return contents

@@ -2,15 +2,13 @@
 const assert = require('node:assert/strict');
 const D = require('../firmware/sdcard/t1n-data.js');
 const row = (t=1770000000, avg=10, tier=0) => ({t,min:avg-2,max:avg+2,avg,count:3,tier});
-const series = (id='rpm',points=[row()],extra={}) => ({id,points,count:points.length,truncated:false,...extra});
-const history = (query={},points=[row()]) => ({ok:true,schemaVersion:2,storage:'microSD',module:0,range:'24h',
-  clockValid:true,corruptRecordsSkipped:0,series:[series('rpm',points)],recording:{minimumChangeSeconds:10,heartbeatSeconds:1800},...query});
-const fromPath = path => history({series:new URL(path,'http://scanner').searchParams.get('ids')?.split(',').map(id=>series(id))||[series()]});
+const history = (query={},points=[row()]) => ({ok:true,schemaVersion:1,storage:'microSD',module:0,id:'rpm',range:'24h',
+  points,count:points.length,truncated:false,recording:{minimumChangeSeconds:10,heartbeatSeconds:1800},...query});
 const response = (data,status=200) => ({ok:status>=200 && status<300,status,json:async () => structuredClone(data)});
 const live = {id:'rpm',label:'Engine RPM',value:'700',unit:'rpm',valid:1,stale:0,sampleMs:1000,ageMs:10};
 const tests = [];
 function test(name,fn) { tests.push({name,fn}); }
-function q(id='rpm') { return {module:0,ids:[id],range:'24h'}; }
+function q(id='rpm') { return {module:0,id,range:'24h'}; }
 function makeSeries(points,unit='rpm') { return {module:0,id:'rpm',label:'Engine RPM',unit,points}; }
 
 test('Reloads obtain identical SD rows, never synthesize samples',async () => {
@@ -19,18 +17,18 @@ test('Reloads obtain identical SD rows, never synthesize samples',async () => {
   const first=await D.createClient({fetchImpl}).history(q());
   const reload=await D.createClient({fetchImpl}).history(q());
   assert.deepEqual(first,reload); assert.equal(calls,2);
-  assert.equal(first.series[0].points.length,1); assert.equal(first.series[0].points[0].t,1770000000);
+  assert.equal(first.points.length,1); assert.equal(first.points[0].t,1770000000);
 });
 test('Only valid server rows cached, expired/error cache never falls back',async () => {
   let now=0, mode='good', calls=0;
   const client=D.createClient({now:()=>now,fetchImpl:async () => {
     calls++; if(mode==='offline') throw Error('Network unavailable');
-    if(mode==='failed') return response({ok:false,code:'SD_UNAVAILABLE',error:'SD unavailable',series:[]},503);
+    if(mode==='failed') return response({ok:false,code:'SD_UNAVAILABLE',error:'SD unavailable',points:[]},503);
     if(mode==='invalid') return response(history({},[row(1770000000,NaN)]));
     return response(history());
   }});
-  const a=await client.history(q()); a.series[0].points[0].avg=999;
-  assert.equal((await client.history(q())).series[0].points[0].avg,10); assert.equal(calls,1);
+  const a=await client.history(q()); a.points[0].avg=999;
+  assert.equal((await client.history(q())).points[0].avg,10); assert.equal(calls,1);
   mode='failed'; await assert.rejects(client.history({...q(),force:true}),{code:'SD_UNAVAILABLE'});
   mode='offline'; await assert.rejects(client.history(q()),/Network unavailable/);
   mode='good'; await client.history(q()); now=15001; mode='invalid';
@@ -39,9 +37,9 @@ test('Only valid server rows cached, expired/error cache never falls back',async
 test('Cache bounds, explicit invalidation, and invalidation during flight',async () => {
   let calls=0, release;
   const client=D.createClient({now:()=>0,fetchImpl:async path => {
-    calls++; const id=new URL(path,'http://scanner').searchParams.get('ids');
+    calls++; const id=new URL(path,'http://scanner').searchParams.get('id');
     if(id==='pending') await new Promise(resolve=>{release=resolve;});
-    return response(fromPath(path));
+    return response(history({id}));
   }});
   for(let i=0;i<17;i++) await client.history(q('metric'+i));
   await client.history(q('metric0')); assert.equal(calls,18);
@@ -59,7 +57,8 @@ test('HTTP requests serialized, identical histories coalesced',async () => {
   const client=D.createClient({fetchImpl:async path => {
     calls++; maximum=Math.max(maximum,++active);
     await new Promise(resolve=>setTimeout(resolve,3)); active--;
-    return response(fromPath(path));
+    const id=new URL(path,'http://scanner').searchParams.get('id');
+    return response(history({id}));
   }});
   await Promise.all([client.history(q()),client.history(q()),client.history(q('rail')),client.request('/api/history/status')]);
   assert.equal(maximum,1); assert.equal(calls,3);
@@ -68,7 +67,7 @@ test('Cooperative query loading permits live status during retry wait',async () 
   const paths=[]; let attempts=0;
   const client=D.createClient({fetchImpl:async path => {
     paths.push(path);
-    if(path.startsWith('/api/history/data')) return ++attempts===1 ? response({ok:false,code:'HISTORY_LOADING',retryAfterMs:50,series:[]},202) : response(history());
+    if(path.startsWith('/api/history/data')) return ++attempts===1 ? response({ok:false,code:'HISTORY_LOADING',retryAfterMs:50,points:[]},202) : response(history());
     if(path==='/api/status') return response({moduleId:0,module:'Engine',connected:0});
     return response({module:'Engine',items:[live]});
   }});
@@ -92,81 +91,14 @@ test('Busy and loading retries bounded; permanent loading reports timeout',async
   } finally { global.setTimeout=original; }
 });
 test('Malformed, mismatched and excessive responses rejected',async () => {
-  for(const bad of [history({storage:'SPIFFS'}),history({schemaVersion:1}),history({series:[series('rail')]}),
-    history({series:[series('rpm',[row()],{count:2})]}),history({},[row(0)]),history({},[row(1770000000,10,3)]),
-    history({},Array.from({length:201},()=>row())),history({series:[]}),history({series:[series(),series('rail')]}),
-    history({clockValid:'yes'}),history({corruptRecordsSkipped:-1})]) {
+  for(const bad of [history({storage:'SPIFFS'}),history({schemaVersion:0}),history({id:'rail'}),history({count:2}),history({points:[row(0)]}),
+    history({points:[row(1770000000,10,3)]}),history({},Array.from({length:201},()=>row()))]) {
     await assert.rejects(D.createClient({fetchImpl:async()=>response(bad)}).history(q()),{code:'INVALID_HISTORY'});
   }
   const client=D.createClient({fetchImpl:async()=>({ok:true,status:200,json:async()=>{throw Error('bad');}})});
   await assert.rejects(client.history(q()),{code:'INVALID_JSON'});
-  await assert.rejects(client.history({module:0,ids:['rpm'],range:'live'}),{code:'INVALID_QUERY'});
+  await assert.rejects(client.history({module:0,id:'rpm',range:'live'}),{code:'INVALID_QUERY'});
   await assert.rejects(client.request('http://wrong/api/status'),{code:'INVALID_PATH'});
-});
-test('Selected metrics share paired SD queries; eight metrics stay bounded',async () => {
-  const paths=[];
-  const client=D.createClient({fetchImpl:async path=>{paths.push(path);return response(fromPath(path));}});
-  const pair=await client.history({module:0,ids:['rail','railTarget'],range:'24h'});
-  assert.equal(paths.length,1);
-  assert.deepEqual(pair.series.map(s=>s.id),['rail','railTarget']);
-  assert.match(paths[0],/ids=rail%2CrailTarget/);
-  assert.equal(new URL(paths[0],'http://scanner').searchParams.has('id'),false);
-  const ids=['rpm','idleTarget','boost','boostTarget','coolant','oilTemp','speed','battery'];
-  const result=await client.history({module:0,ids,range:'24h'});
-  assert.equal(paths.length,5);
-  assert.deepEqual(result.series.map(s=>s.id),ids);
-  assert.deepEqual(paths.slice(1).map(p=>new URL(p,'http://scanner').searchParams.get('ids').split(',')),
-    [['rpm','idleTarget'],['boost','boostTarget'],['coolant','oilTemp'],['speed','battery']]);
-  const odd=await client.history({module:0,ids:['rail','railTarget','speed'],range:'24h'});
-  assert.deepEqual(odd.series.map(s=>s.id),['rail','railTarget','speed']);
-  assert.equal(paths.length,6,'The cached pair is reused; the final odd metric is fetched once');
-});
-test('Superseded UI selections stop before another SD batch',async () => {
-  let current=true,calls=0;
-  const client=D.createClient({fetchImpl:async path=>{calls++;current=false;return response(fromPath(path));}});
-  await assert.rejects(client.history({module:0,ids:['rail','railTarget','rpm','idleTarget'],range:'24h',isCurrent:()=>current}),{code:'HISTORY_SUPERSEDED'});
-  assert.equal(calls,1);
-});
-test('Superseded queued selections never start another SD query',async () => {
-  const ids=[];let release,current=true;
-  const client=D.createClient({fetchImpl:async path=>{
-    const selected=new URL(path,'http://scanner').searchParams.get('ids');ids.push(selected);
-    if(selected==='holding')await new Promise(resolve=>{release=resolve;});
-    return response(fromPath(path));
-  }});
-  const holding=client.history(q('holding'));
-  while(!release)await new Promise(resolve=>setImmediate(resolve));
-  const obsolete=assert.rejects(client.history({...q('obsolete'),isCurrent:()=>current}),{code:'HISTORY_SUPERSEDED'});
-  const latest=client.history(q('latest'));
-  current=false;release();await Promise.all([holding,obsolete,latest]);
-  assert.deepEqual(ids,['holding','latest']);
-});
-test('Current coalesced caller preserves a queued batch after its first caller changes selection',async () => {
-  const ids=[];let release,current=true;
-  const client=D.createClient({fetchImpl:async path=>{
-    const selected=new URL(path,'http://scanner').searchParams.get('ids');ids.push(selected);
-    if(selected==='holding')await new Promise(resolve=>{release=resolve;});
-    return response(fromPath(path));
-  }});
-  const holding=client.history(q('holding'));
-  while(!release)await new Promise(resolve=>setImmediate(resolve));
-  const first=client.history({...q('rail'),isCurrent:()=>current});
-  current=false;
-  const second=client.history({...q('rail'),isCurrent:()=>true});
-  release();const [a,b]=await Promise.all([first,second,holding]);
-  assert.deepEqual(ids,['holding','rail']);
-  assert.deepEqual(a,b);
-});
-test('Invalid selections rejected before HTTP; second-batch errors never return partial history',async () => {
-  let calls=0;
-  const client=D.createClient({fetchImpl:async path=>{calls++;return calls===2 ? response({ok:false,code:'HISTORY_READ_FAILED',error:'SD failed',series:[]},503) : response(fromPath(path));}});
-  for(const ids of [[],['rpm','rpm'],[''],['bad,value'],['x'.repeat(51)],Array.from({length:9},(_,i)=>'m'+i),[null]])
-    await assert.rejects(client.history({module:0,ids,range:'24h'}),{code:'INVALID_QUERY'});
-  await assert.rejects(client.history({module:0,id:'rpm',range:'24h'}),{code:'INVALID_QUERY'});
-  assert.equal(calls,0);
-  await assert.rejects(client.history({module:0,ids:['rail','railTarget','rpm'],range:'24h'}),{code:'HISTORY_READ_FAILED'});
-  await client.history({module:0,ids:['rail','railTarget'],range:'24h'});
-  assert.equal(calls,3,'Failure removes previously successful batches from cache');
 });
 test('Scanner availability, ECU disconnected, sensor failure remain independent',async () => {
   let broken=false;

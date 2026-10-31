@@ -5,9 +5,7 @@
 static std::string result;
 void sink(const char* s,size_t n,void*){assert(n<=1436);result.append(s,n);}
 int main(){
- static_assert(sizeof(BoundedJson)<=4*sizeof(void*),"JSON encoders must not own their chunk buffer");
- BoundedJson::Workspace workspace;
- BoundedJson json(workspace,sink);
+ BoundedJson json(sink);
  json.raw("{\"items\":[");
  for(unsigned i=0;i<500;i++){
   if(i)json.raw(",");

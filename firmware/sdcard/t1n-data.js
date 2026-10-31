@@ -78,19 +78,13 @@
   }
   function validateHistory(data, query) {
     if (!data || data.ok !== true) throw failure(data && data.code || 'HISTORY_UNAVAILABLE',data && data.error || 'SD history unavailable');
-    if (data.schemaVersion !== 2 || data.storage !== 'microSD' || Number(data.module) !== query.module ||
-      data.range !== query.range || typeof data.clockValid !== 'boolean' ||
-      !Number.isInteger(data.corruptRecordsSkipped) || data.corruptRecordsSkipped < 0 || !data.recording ||
-      data.recording.minimumChangeSeconds !== 10 || data.recording.heartbeatSeconds !== 1800 ||
-      !Array.isArray(data.series) || data.series.length !== query.ids.length)
+    if (data.schemaVersion !== 1 || data.storage !== 'microSD' || Number(data.module) !== query.module ||
+      data.id !== query.id || data.range !== query.range || !data.recording ||
+      data.recording.minimumChangeSeconds !== 10 || data.recording.heartbeatSeconds !== 1800)
       throw failure('INVALID_HISTORY','Unsupported SD history response');
-    const series = data.series.map((item,index) => {
-      if (!item || item.id !== query.ids[index]) throw failure('INVALID_HISTORY','History selection mismatch');
-      const points = validatePoints(item.points);
-      if (item.count !== points.length || typeof item.truncated !== 'boolean') throw failure('INVALID_HISTORY','History count mismatch');
-      return Object.assign({},item,{points});
-    });
-    return Object.assign({},data,{series});
+    const points = validatePoints(data.points);
+    if (data.count !== points.length || typeof data.truncated !== 'boolean') throw failure('INVALID_HISTORY','History count mismatch');
+    return Object.assign({},data,{points});
   }
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
   function createClient(options) {
@@ -136,21 +130,19 @@
           sensorsError:err.message || 'Sensor readings unavailable',sensorsErrorCode:err.code || 'SENSORS_UNAVAILABLE'};
       }
     }
-    function historyBatch(q, force, isCurrent) {
-      const key = q.module+':'+q.ids.join(',')+':'+q.range, saved = cache.get(key);
-      if (!force && saved && now()-saved.savedMs >= 0 && now()-saved.savedMs < 15000) return Promise.resolve(clone(saved.data));
-      const existing = pending.get(key);
-      if (existing) { existing.consumers.push(isCurrent); return existing.result.then(clone); }
-      const consumers = [isCurrent];
+    function history(query) {
+      const q = {module:Number(query.module),id:String(query.id),range:String(query.range || '24h')};
+      if (!Number.isInteger(q.module) || q.module < 0 || q.module > 5 || !/^[a-z0-9_]+$/i.test(q.id) || !['1h','24h','7d','30d','all'].includes(q.range))
+        return Promise.reject(failure('INVALID_QUERY','Invalid history selection'));
+      const key = q.module+':'+q.id+':'+q.range, saved = cache.get(key);
+      if (!query.force && saved && now()-saved.savedMs >= 0 && now()-saved.savedMs < 15000) return Promise.resolve(clone(saved.data));
+      if (pending.has(key)) return pending.get(key).then(clone);
       const generation = cacheGeneration;
       const result = historyQueue.then(async () => {
-        // Skip obsolete queued selections; finish queries already started so
-        // their server-side slot is consumed and shared callers can reuse them.
-        if (!consumers.some(current => !current || current())) throw failure('HISTORY_SUPERSEDED','History selection changed');
         const started = Date.now();
         try {
           for (let attempt=0; attempt<120 && Date.now()-started<30000; attempt++) {
-            const {response,data} = await get('/api/history/data?module='+q.module+'&ids='+encodeURIComponent(q.ids.join(','))+'&range='+q.range);
+            const {response,data} = await get('/api/history/data?module='+q.module+'&id='+encodeURIComponent(q.id)+'&range='+q.range);
             if ((response.status === 202 && data.code === 'HISTORY_LOADING') || (response.status === 503 && data.code === 'HISTORY_QUERY_BUSY')) {
               const delay = Math.max(50,Math.min(1000,Number(data.retryAfterMs) || 250));
               await new Promise(resolve => setTimeout(resolve,delay));
@@ -167,25 +159,9 @@
         } catch (err) { cache.clear(); cacheGeneration++; throw err; }
       });
       historyQueue = result.catch(() => {});
-      pending.set(key,{result,consumers});
+      pending.set(key,result);
       result.then(() => pending.delete(key),() => pending.delete(key));
       return result.then(clone);
-    }
-    async function history(query) {
-      const q = {module:Number(query.module),ids:Array.isArray(query.ids) ? query.ids.slice() : [],range:String(query.range || '24h')};
-      if (!Number.isInteger(q.module) || q.module < 0 || q.module > 5 || !q.ids.length || q.ids.length > MAX_SERIES ||
-        q.ids.some(id => typeof id !== 'string' || !/^[a-z0-9_-]{1,50}$/i.test(id)) || new Set(q.ids).size !== q.ids.length ||
-        !['1h','24h','7d','30d','all'].includes(q.range)) throw failure('INVALID_QUERY','Invalid history selection');
-      let result;
-      for (let offset=0; offset<q.ids.length; offset+=2) {
-        if (query.isCurrent && !query.isCurrent()) throw failure('HISTORY_SUPERSEDED','History selection changed');
-        const batch = await historyBatch({...q,ids:q.ids.slice(offset,offset+2)},query.force,query.isCurrent);
-        if (!result) result = {...batch,series:[]};
-        result.clockValid = result.clockValid && batch.clockValid;
-        result.corruptRecordsSkipped = Math.max(result.corruptRecordsSkipped,batch.corruptRecordsSkipped);
-        result.series.push(...batch.series);
-      }
-      return result;
     }
     return {request,snapshot,history,historyStatus:() => request('/api/history/status'),invalidateHistory:() => { cache.clear(); cacheGeneration++; }};
   }

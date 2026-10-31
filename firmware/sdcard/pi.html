@@ -98,14 +98,16 @@ async function loadHistory(){
  const token=++state.historyToken,module=state.historyModule,range=state.range,ids=[...state.selected];
  state.series=[];state.historyBusy=true;state.historyAt=Date.now();$('chart').innerHTML='';$('exportCsv').disabled=true;$('historyMessage').className='history-message';$('historyMessage').textContent=ids.length?'Loading saved SD measurements…':'Select up to eight measurements.';
  try{
-  if(!ids.length)return;
-  const result=await client.history({module,ids,range,force:true,isCurrent:()=>token===state.historyToken});
+  const series=[];let truncated=false;
+  for(const id of ids){
+   if(token!==state.historyToken)return;
+   const result=await client.history({module,id,range,force:true});
+   if(token!==state.historyToken)return;
+   truncated=truncated||result.truncated;
+   const meta=metadata(module).find(m=>m.id===id)||{label:id,unit:''};
+   series.push({module,id,label:result.label||meta.label,unit:result.unit||meta.unit,points:result.points});
+  }
   if(token!==state.historyToken)return;
-  const truncated=result.series.some(s=>s.truncated);
-  const series=result.series.map(saved=>{
-   const meta=metadata(module).find(m=>m.id===saved.id)||{label:saved.id,unit:''};
-   return {module,id:saved.id,label:meta.label,unit:meta.unit,points:saved.points};
-  });
   state.series=series;state.historyAt=Date.now();
   const count=series.reduce((n,s)=>n+s.points.length,0);
   $('historyMessage').textContent=count?count+' saved records · source timestamps in UTC'+(truncated?' · response limited; choose a shorter range':''):'No saved records for this selection.';

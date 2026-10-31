@@ -9,13 +9,11 @@
 // One configured TCP MSS avoids exhausting lwIP packet slots with tiny writes.
 class BoundedJson {
  public:
-  struct Workspace { char bytes[1436]; };
   using Sink = void (*)(const char*, size_t, void*);
-  BoundedJson(Workspace &workspace,Sink sink,void* context=nullptr)
-      : workspace_(workspace),sink_(sink),context_(context) {}
-  void flush() { if(used_) { sink_(workspace_.bytes,used_,context_); used_=0; } }
+  BoundedJson(Sink sink, void* context=nullptr): sink_(sink), context_(context) {}
+  void flush() { if(used_) { sink_(buffer_,used_,context_); used_=0; } }
   void raw(const char* s) { while(*s) character(*s++); }
-  void character(char c) { workspace_.bytes[used_++]=c; if(used_==sizeof(workspace_.bytes))flush(); }
+  void character(char c) { buffer_[used_++]=c; if(used_==sizeof(buffer_))flush(); }
   void string(const char* s) {
     character('"');
     for(const unsigned char* p=(const unsigned char*)s;*p;p++) {
@@ -31,5 +29,5 @@ class BoundedJson {
     char b[40];snprintf(b,sizeof(b),"%.8g",value);raw(b);
   }
  private:
-  Workspace &workspace_;Sink sink_;void* context_;size_t used_=0;
+  Sink sink_;void* context_;char buffer_[1436];size_t used_=0;
 };

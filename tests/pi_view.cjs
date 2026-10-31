@@ -13,7 +13,7 @@ function node(id){if(!nodes.has(id))nodes.set(id,{id,innerHTML:'',textContent:''
 const pages=['dashboard','trends','alerts','modules','system'].map(node);
 let response={points:[{t:1760000000,min:100,max:120,avg:110,count:2,tier:0}],truncated:false};
 let historyError=null,historyCalls=[];
-const api={history:async query=>{historyCalls.push(query);if(historyError)throw historyError;return {series:query.ids.map(id=>({id,...response}))};},request:async()=>({}),historyStatus:async()=>({}),snapshot:async()=>({})};
+const api={history:async query=>{historyCalls.push(query);if(historyError)throw historyError;return response;},request:async()=>({}),historyStatus:async()=>({}),snapshot:async()=>({})};
 const context=vm.createContext({T1NData:{...shared,createClient:()=>api},document:{getElementById:node,querySelectorAll:selector=>selector==='.page'?pages:[]},Date,Number,String,Math,Set,Blob,URL,setTimeout(){},setInterval(){}});
 const script=html.match(/<script>\s*([\s\S]*?)<\/script>/)[1].replace(/initialize\(\);\s*$/,'');
 vm.runInContext(script,context);
@@ -22,10 +22,10 @@ const run=source=>vm.runInContext(source,context);
  // Source records load without a diagnostic session or any prior live sample.
  run("state.online=true;state.snapshot={status:{connected:0},sensors:{moduleId:0,items:[]}};state.receivedMs=Date.now();");
  await run('loadHistory()');
- assert.equal(historyCalls.length,1);
+ assert.equal(historyCalls.length,2);
  assert.equal(historyCalls[0].module,0);
  assert.equal(historyCalls[0].range,'24h');
- assert.deepEqual(Array.from(historyCalls[0].ids),['rail','railTarget']);
+ assert.equal(historyCalls[0].id,'rail');
  assert.ok(node('chart').innerHTML.includes('<svg'));
  assert.equal(run('state.series[0].points[0].t'),1760000000);
  assert.equal(node('exportCsv').disabled,false);

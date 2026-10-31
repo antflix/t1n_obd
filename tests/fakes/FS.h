@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
-#include <sstream>
 using std::min;using std::max;
 class String:public std::string {
  public:
@@ -16,8 +15,6 @@ class String:public std::string {
  void remove(size_t at,size_t n){erase(at,n);}
  int indexOf(char c,size_t at){auto i=find(c,at);return i==npos?-1:(int)i;}
  void concat(const char*p,size_t n){append(p,n);}
- String substring(size_t start,size_t end=npos)const{return substr(start,end==npos?npos:end-start);}
- void replace(const char*from,const char*to){size_t at=0;const size_t n=strlen(from);while(n&&(at=find(from,at))!=npos){std::string::replace(at,n,to);at+=strlen(to);}}
  String(unsigned long n):std::string(std::to_string(n)){}
  String(unsigned n):std::string(std::to_string(n)){}
  String(int n):std::string(std::to_string(n)){}
@@ -39,8 +36,6 @@ class File {
  size_t write(const uint8_t*in,size_t n){if(!data)return 0;if(shortWrite&&*shortWrite)n/=2;data->resize(max(data->size(),pos+n));memcpy(data->data()+pos,in,n);pos+=n;return n;}
  size_t available()const{return data?data->size()-pos:0;}
  int read(){uint8_t c;return read(&c,1)==1?c:-1;}
- template <typename T> size_t print(const T &value){std::ostringstream out;out<<value;auto s=out.str();return write(reinterpret_cast<const uint8_t*>(s.data()),s.size());}
- template <typename T> size_t println(const T &value){size_t n=print(value);return n+print('\n');}
  void flush(){}void close(){data=nullptr;}
 };
 namespace fs {class FS {
@@ -56,7 +51,6 @@ namespace fs {class FS {
   auto &v=files[name];File f;f.data=&v;f.shortWrite=&shortWrite;f.failRead=&failRead;f.readCalls=&readCalls;f.maxReadBytes=&maxReadBytes;f.pos=mode[0]=='a'?v.size():0;return f;
  }
  bool exists(const String&p){return files.count(p);}
- bool remove(const String&p){return files.erase(p)!=0;}
  bool mkdir(const String&){return !failMkdir;}
  uint32_t totalBytes(){return 100000000;}uint32_t usedBytes(){return 0;}
 };}

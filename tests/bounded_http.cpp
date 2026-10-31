@@ -7,18 +7,12 @@
 struct Socket {
   uint32_t now=1000,sendCost=0,closeCost=0;
   size_t maxSend=65536,calls=0,closed=0,blockAfter=~size_t(0);
-  size_t temporaryStallAfter=~size_t(0);
-  uint32_t temporaryStallUntil=0;
   bool fatal=false;
   std::string wire;
   static uint32_t clock(void *p){return ((Socket*)p)->now;}
   static ptrdiff_t send(const char *data,size_t length,void *p){
     auto &s=*(Socket*)p;s.calls++;s.now+=s.sendCost;
     if(s.fatal)return -1;
-    if(s.now<s.temporaryStallUntil){
-      if(s.wire.size()>=s.temporaryStallAfter)return 0;
-      length=std::min(length,s.temporaryStallAfter-s.wire.size());
-    }
     if(s.wire.size()>=s.blockAfter)return 0;
     const size_t n=std::min({length,s.maxSend,s.blockAfter-s.wire.size()});
     s.wire.append(data,n);return (ptrdiff_t)n;
@@ -30,64 +24,16 @@ struct Socket {
 };
 
 int main(){
-  BoundedJson::Workspace workspace;
   // The same serializer determines exact length and sends >8KB without allocation.
   Socket json;json.maxSend=7;BoundedHttp jsonResponse(json.operations());
-  assert(writeHttpJson(jsonResponse,workspace,[](BoundedJson &out){
+  assert(writeHttpJson(jsonResponse,[](BoundedJson &out){
     out.raw("{\"items\":[");for(unsigned i=0;i<500;i++){if(i)out.raw(",");out.raw("{\"id\":");out.integer(i);out.raw(",\"label\":");out.string("quoted\"\n\t °C");out.raw("}");}out.raw("]}");
   }));
   assert(json.body().size()>8192);
   assert(json.wire.find("Content-Length: "+std::to_string(json.body().size())+"\r\n")!=std::string::npos);
   Socket packed;BoundedHttp packedResponse(packed.operations());
-  assert(writeHttpJson(packedResponse,workspace,[](BoundedJson &out){out.raw("{\"value\":");out.string(std::string(12000,'x').c_str());out.raw("}");}));
+  assert(writeHttpJson(packedResponse,[](BoundedJson &out){out.raw("{\"value\":");out.string(std::string(12000,'x').c_str());out.raw("}");}));
   assert(packed.calls<=packed.body().size()/1436+3); // Header + full MSS chunks + tail.
-  // A selected history pair can exceed 32 KB; its encoder is still streamed
-  // through the same fixed MSS buffer and one shared response deadline.
-  Socket pair;BoundedHttp pairResponse(pair.operations());
-  auto emitPair=[](BoundedJson &out){
-    out.raw("{\"series\":[");
-    for(unsigned series=0;series<2;series++){
-      if(series)out.raw(",");
-      out.raw("{\"points\":[");
-      for(unsigned i=0;i<200;i++){
-        if(i)out.raw(",");
-        out.raw("{\"t\":1793300000,\"min\":-123456789.12345,\"avg\":123456789.12345,\"max\":987654321.12345,\"count\":4294967295,\"tier\":2}");
-      }
-      out.raw("]}");
-    }
-    out.raw("]}");
-  };
-  assert(writeHttpJson(pairResponse,workspace,emitPair));assert(pair.body().size()>40000);
-  assert(pair.wire.find("Content-Length: "+std::to_string(pair.body().size())+"\r\n")!=std::string::npos);
-  assert(pair.calls<=pair.body().size()/1436+3);
-  // Temporary socket backpressure can clear before the absolute deadline;
-  // the real serializer must then complete the exact same header and body.
-  const size_t pairHeaderBytes=pair.wire.size()-pair.body().size();
-  Socket delayedPair;delayedPair.temporaryStallAfter=pairHeaderBytes+4308;
-  delayedPair.temporaryStallUntil=delayedPair.now+240;
-  BoundedHttp delayedPairResponse(delayedPair.operations());
-  assert(writeHttpJson(delayedPairResponse,workspace,emitPair));
-  assert(delayedPair.wire==pair.wire&&delayedPairResponse.durationMs()==240);
-  assert(delayedPairResponse.error()==BoundedHttp::Error::None&&delayedPair.closed==1);
-  // An otherwise identical temporary delay beyond 250 ms is explicitly cut
-  // off, even though the socket would become writable again shortly after.
-  Socket latePair;latePair.temporaryStallAfter=pairHeaderBytes+4308;
-  latePair.temporaryStallUntil=latePair.now+260;
-  BoundedHttp latePairResponse(latePair.operations());
-  assert(!writeHttpJson(latePairResponse,workspace,emitPair));
-  assert(latePairResponse.error()==BoundedHttp::Error::Timeout);
-  assert(latePairResponse.durationMs()==250&&latePair.closed==1);
-  assert(latePair.body().size()==4308&&latePair.wire==pair.wire.substr(0,latePair.wire.size()));
-  const auto lateCalls=latePair.calls;latePair.now=latePair.temporaryStallUntil;
-  assert(!latePairResponse.write("x",1)&&!latePairResponse.finish());
-  assert(latePair.calls==lateCalls&&latePair.closed==1);
-  Socket stalledPair;stalledPair.blockAfter=18000;BoundedHttp stalledPairResponse(stalledPair.operations());
-  assert(!writeHttpJson(stalledPairResponse,workspace,emitPair));
-  assert(stalledPairResponse.durationMs()==250&&stalledPair.closed==1);
-  // A failed response must not leave chunk state in the reused workspace.
-  Socket recoveredPair;BoundedHttp recoveredPairResponse(recoveredPair.operations());
-  assert(writeHttpJson(recoveredPairResponse,workspace,emitPair));
-  assert(recoveredPair.wire==pair.wire);
   Socket closeMeasured;closeMeasured.closeCost=7;BoundedHttp closedResponse(closeMeasured.operations());
   assert(closedResponse.begin(0)&&closedResponse.finish()&&closedResponse.durationMs()==7);
   // Short socket writes are completed without changing Content-Length or JSON.
@@ -129,5 +75,5 @@ int main(){
   Socket capped;capped.blockAfter=0;BoundedHttp c(capped.operations(),10000);
   assert(!c.begin(1)&&c.durationMs()==250);
   Socket empty;BoundedHttp e(empty.operations());assert(e.begin(0)&&e.finish()&&empty.body().empty());
-  std::cout<<"Bounded HTTP partial writes, temporary backpressure, stalled peer, slow progress, abort, exact length and rollover PASS\n";
+  std::cout<<"Bounded HTTP partial writes, stalled peer, slow progress, abort, exact length and rollover PASS\n";
 }

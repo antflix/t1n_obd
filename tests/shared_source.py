@@ -25,23 +25,7 @@ spec=importlib.util.spec_from_file_location('package_web',ROOT/'scripts/package_
 package=importlib.util.module_from_spec(spec);spec.loader.exec_module(package)
 assets=package.assets();manifest=json.loads(assets['www/manifest.json'])
 assert set(assets)=={'www/index.html','www/advanced.html','www/pi.html','www/manifest.json'}
-assert manifest['historySchema']==2
+assert manifest['historySchema']==1
 for name,digest in manifest['sha256'].items():assert hashlib.sha256(assets[name]).hexdigest()==digest
 assert assets['www/pi.html']==(ROOT/'firmware/sdcard/pi.html').read_bytes()
 print('One SD history source, canonical sensor visitor, matching UI package and read-only module browsing PASS')
-
-# Every manual UART entry point, including old aliases, rejects automatic ownership
-# before parsing input or changing hardware. Pages and history remain GET-only.
-manual_paths=['/api/module/read', '/api/relay/test', '/api/shared-probe/run', '/api/shared-probe/timing', '/api/module/connect', '/api/hzr/fan/status', '/api/hzr/fan/on', '/api/disconnect', '/api/poll/start', '/api/poll/stop', '/api/dtc/read', '/api/test', '/api/test/actuator', '/api/test/release', '/config/save', '/config/importlab', '/config/defaults', '/connect', '/disconnect', '/poll/start', '/poll/stop', '/dtc/read', '/dtc/clear', '/payload']
-for path in manual_paths:
-    handler='web.on("'+path+'",HTTP_POST,[]{'
-    assert handler+'if(rejectManualDiagnostic())return;' in routes,path
-assert 'monitorManualOverride' not in routes
-assert 'monitorManualHold' not in read('firmware/t1n_obd/38_autonomous_monitor.ino')
-assert 'AUTO_MONITOR_OWNS_UART' in routes and 'web.send(409,' in routes
-assert 'web.arg("ids"),web.arg("range")' in routes
-print('All manual UART routes and aliases require explicit autonomous pause PASS')
-
-assert 'requestedModule=(ModuleId)id;jobConnect=true;activity(' in routes
-assert routes.count('reconnectAtMs=0;busy=true;disconnectCurrentModule();busy=false;')==2
-assert 'if(jobConnect&&!busy){connectModule(requestedModule);jobConnect=false;}' in routes

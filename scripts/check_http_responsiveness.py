@@ -40,7 +40,7 @@ def main():
             stalled.setsockopt(socket.IPPROTO_TCP, socket.TCP_WINDOW_CLAMP, 1024)
         stalled.settimeout(2)
         try:
-            path = '/api/history/data?module=0&ids=rail,railTarget&range=24h' if args.history else '/api/sensors'
+            path = '/api/history/data?module=0&id=rail&range=24h' if args.history else '/api/sensors'
             deadline = time.monotonic() + 45
             while True:
                 stalled.connect((address.hostname, address.port or 80))

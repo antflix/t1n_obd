@@ -6,8 +6,6 @@ struct HttpResponseMetrics {
   uint32_t timeouts=0,failures=0,maxMs=0;
 };
 static HttpResponseMetrics httpMetrics;
-// One loop-owned HTTP response at a time; sending yields without servicing HTTP.
-static BoundedJson::Workspace httpJsonWorkspace;
 inline uint32_t scannerHttpNow(void*){return millis();}
 inline ptrdiff_t scannerHttpSend(const char *data,size_t length,void *context){
   auto &client=*static_cast<NetworkClient*>(context);
@@ -29,5 +27,5 @@ inline void scannerHttpRecord(const BoundedHttp &response){
 template <typename Emit> void sendScannerJson(Emit emit){
   NetworkClient client=web.client();
   BoundedHttp response(scannerHttpOperations(client));
-  writeHttpJson(response,httpJsonWorkspace,emit);scannerHttpRecord(response);
+  writeHttpJson(response,emit);scannerHttpRecord(response);
 }
