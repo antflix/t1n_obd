@@ -143,3 +143,29 @@ versus paired requests, followed by paused versus active diagnostics, preserving
 SD records and transport timing. Actual paired speed, mode-transition/reboot
 qualification beyond initial startup, secondary-module visits and physical Pi
 kiosk verification remain incomplete.
+
+## Private stack-allocation experiment
+
+A private copy of the source was compiled with only `writeHttpJson` marked
+`__attribute__((noinline))`. This keeps its MSS-sized encoder storage out of
+`historyDataSend` when the handler merely returns a loading/error response. Final
+linked Xtensa ELF measurements:
+
+| Frame/path | Installed candidate | Private experiment |
+| --- | ---: | ---: |
+| `historyDataSend` | 3,232 bytes | 544 bytes |
+| Separate history JSON writer | inlined | 1,504 bytes |
+| Completed handler plus writer, before deeper helpers | 3,232 bytes | 2,048 bytes |
+
+This saves 2,688 bytes on loading/error paths, and 1,184 bytes on completed
+response paths. Static RAM stays 122,864 bytes. Program usage decreases from
+1,412,848 to 1,412,672 bytes. The actual production-history and bounded-HTTP
+native tests pass with identical payload/read-count assertions, and the Arduino
+build passes. This is evidence of stack savings, not evidence that stack overflow
+caused the scanner outage.
+
+The experiment changed only the private source copy, not this repository's
+runtime code or the live device. Its patch, build log, result JSON and disassembly
+are under `/home/ant/t1n-batched-owner-build/stack-experiment/`. The experimental
+binary is not a release or rollback image. Restore version24 and obtain the
+missing hardware evidence before deciding whether to apply this isolated change.
