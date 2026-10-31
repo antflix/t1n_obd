@@ -364,11 +364,7 @@ void historyDataSend(uint8_t module,const String &id,const String &range){
     q.now=now?now:hLatestEpoch;q.key=historyKey(module,id.c_str());
     uint32_t span=range=="1h"?3600UL:range=="24h"?86400UL:range=="7d"?604800UL:2592000UL;
     q.after=range=="all"?0:(now>span?now-span:0);
-    // Tier windows are disjoint: recent covers <=1h, quarter covers
-    // >1h through 24h, daily covers >24h. Skip files that cannot match.
-    q.used[0]=hRings[0].used;
-    q.used[1]=range=="1h"?0:hRings[1].used;
-    q.used[2]=(range=="1h"||range=="24h")?0:hRings[2].used;
+    for(unsigned i=0;i<3;i++)q.used[i]=hRings[i].used;
   }
   q.lastRequest=millis();
   // readRaw() can serve HTTP from inside an ECU response wait. Keep that

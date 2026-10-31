@@ -34,11 +34,6 @@ int main(){
   Socket packed;BoundedHttp packedResponse(packed.operations());
   assert(writeHttpJson(packedResponse,[](BoundedJson &out){out.raw("{\"value\":");out.string(std::string(12000,'x').c_str());out.raw("}");}));
   assert(packed.calls<=packed.body().size()/1436+3); // Header + full MSS chunks + tail.
-  Socket asset;BoundedHttp assetResponse(asset.operations());
-  assert(assetResponse.begin(3,"text/html; charset=utf-8","gzip","Content-Disposition: attachment; filename=page.gz\r\n"));
-  assert(assetResponse.write("abc",3)&&assetResponse.finish());
-  assert(asset.wire.find("Content-Type: text/html; charset=utf-8\r\nContent-Encoding: gzip\r\nContent-Disposition: attachment; filename=page.gz\r\n")!=std::string::npos);
-
   Socket closeMeasured;closeMeasured.closeCost=7;BoundedHttp closedResponse(closeMeasured.operations());
   assert(closedResponse.begin(0)&&closedResponse.finish()&&closedResponse.durationMs()==7);
   // Short socket writes are completed without changing Content-Length or JSON.

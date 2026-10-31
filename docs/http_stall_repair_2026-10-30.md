@@ -31,3 +31,11 @@ Active polling exposed additional response deadlines (30 total after only four d
 The accepted sockets already have TCP_NODELAY enabled. Sending each 256-byte encoder flush separately wastes the limited lwIP packet queue (configured send buffer 5,744 bytes, MSS 1,436 bytes). `1.10.22-http-packets-test` therefore uses a fixed 1,436-byte JSON buffer and file chunks, keeping the same absolute deadline. Counter/output serializer lifetimes are separated to limit stack use; stack minimum telemetry is added. The response format and logging policy do not change. Regression tests require MSS-sized output call counts for a 12 KB JSON response.
 
 Before installation of this follow-up, the ESP32 stopped responding even to ICMP, while the router remained reachable. Power/network state confirmation was requested; this is separate from declaring the HTTP repair verified under active load.
+
+## Scope narrowed at the user's request
+
+A comparison confirmed that 1.10.19 to 1.10.20 changed only mobile UI, version and tests/notes; their sensor/history streaming backends were identical. The new loading message was not the failure; chart retrieval blocked, and the sender could stall the shared loop.
+
+Removed the broader response conversions from this repair: SD storage/page/download code and setup routes are restored byte-for-byte to 1.10.20. Removed generic HTML/text/file/gzip/header output helpers and the tier-skipping optimization. The candidate `1.10.23-narrow-http-test` replaces only the sensor and completed-history output paths, using the same JSON schema, captured sample time, fixed MSS buffer and bounded socket sender. It retains minimal reset/heap/stack/HTTP telemetry for verification. There is one sensor/history sender, with the old chunked path deleted; no fallback or competing implementation remains. Existing asset loaders and logger/scheduler/ECU protocols are unchanged from the working baseline.
+
+Version22 hardware checks passed stalled sensor readers both idle and active (active status replies14ms), and a stalled completed24h rail-history response (14ms), with continuous uptime/engine polling and persisted SD writes. This short interval is not treated as equivalent to the user's previous hour-long run. Version23 will repeat these targeted checks after installation.

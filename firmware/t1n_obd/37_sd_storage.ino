@@ -67,7 +67,7 @@ bool sdServePage(const char*path) {
   File f=SD.open(path,FILE_READ);
   if(!f||f.isDirectory()){if(f)f.close();return false;}
   web.sendHeader("Cache-Control","no-store");
-  sendScannerFile(f,"text/html; charset=utf-8");
+  web.streamFile(f,"text/html; charset=utf-8");
   f.close();
   return true;
 }
@@ -145,6 +145,6 @@ void sdServeAssetDownload() {
   File f=SD.open("/www/"+name,FILE_READ);
   if(!f){web.send(404,"text/plain","SD asset absent");return;}
   web.sendHeader("Cache-Control","no-store");
-  sendScannerFile(f,name.endsWith(".json")?"application/json":"text/html; charset=utf-8");
+  web.streamFile(f,name.endsWith(".json")?"application/json":"text/html; charset=utf-8");
   f.close();
 }

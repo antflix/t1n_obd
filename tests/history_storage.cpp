@@ -159,24 +159,6 @@ int main(){
  testEpoch=0;query(0,"rpm","1h");assert(web.code==503&&web.body.find("CLOCK_INVALID")!=String::npos);
  query(0,"rpm","all");assert(web.code==200&&web.body.find("\"clockValid\":false")!=String::npos);
  query(0,"rpm","invalid");assert(web.code==400);query(9,"rpm","all");assert(web.code==400);
- // Query-level tier skipping preserves exact hour/day boundaries and avoids
- // opening unrelated journals, even if those irrelevant files are unreadable.
- resetRings();testEpoch=1793300000;
- put(0,3600);put(0,3601);
- put(1,3600);put(1,3601);put(1,86400);
- put(2,86400);put(2,86401);
- historyDataSend(0,"rpm","1h");assert(web.code==202);
- assert(hQueryState.used[0]==2&&hQueryState.used[1]==0&&hQueryState.used[2]==0);
- query(0,"rpm","1h");assert(web.code==200&&web.body.find("\"count\":1")!=String::npos);
- historyDataSend(0,"rpm","24h");assert(web.code==202);
- assert(hQueryState.used[0]==2&&hQueryState.used[1]==3&&hQueryState.used[2]==0);
- query(0,"rpm","24h");assert(web.code==200&&web.body.find("\"count\":3")!=String::npos);
- query(0,"rpm","7d");assert(web.code==200&&web.body.find("\"count\":4")!=String::npos);
- SD.files.erase("/t1nlogs/hist_day.dat");
- query(0,"rpm","24h");assert(web.code==200&&web.body.find("\"count\":3")!=String::npos);
- SD.files.erase("/t1nlogs/hist_15m.dat");
- query(0,"rpm","1h");assert(web.code==200&&web.body.find("\"count\":1")!=String::npos);
- query(0,"rpm","7d");assert(web.code==503&&web.body.find("HISTORY_READ_FAILED")!=String::npos);
  assert(!historySetClock(0));assert(!historySetClock(0xffffffff));
  std::cout<<"SD-only history: absent storage, failed reads/writes, backoff, checksum corruption, interrupted tails, rollover, dedup, bounded queries, ranges/gaps and invalid clock PASS\n";
 }

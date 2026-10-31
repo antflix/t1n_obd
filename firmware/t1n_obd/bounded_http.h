@@ -21,14 +21,14 @@ class BoundedHttp {
       : operations_(operations), startedMs_(operations_.nowMs(operations_.context)),
         budgetMs_(budgetMs>250?250:budgetMs) {}
 
-  bool begin(size_t bodyLength,const char *contentType="application/json",const char *encoding=nullptr,const char *extraHeaders=nullptr) {
+  bool begin(size_t bodyLength) {
     if (begun_ || finished_ || failed()) return fail(Error::State);
     begun_=true; expectedBodyBytes_=bodyLength;
-    char header[320];
+    char header[192];
     const int length=snprintf(header,sizeof(header),
-      "HTTP/1.1 200 OK\r\nContent-Type: %s\r\n%s%s%s%s"
+      "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
       "Content-Length: %lu\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n",
-      contentType,encoding?"Content-Encoding: ":"",encoding?encoding:"",encoding?"\r\n":"",extraHeaders?extraHeaders:"",(unsigned long)bodyLength);
+      (unsigned long)bodyLength);
     if (length<0 || (size_t)length>=sizeof(header)) return fail(Error::Length);
     return writeWire(header,(size_t)length);
   }
