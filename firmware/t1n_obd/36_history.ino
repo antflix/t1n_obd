@@ -373,8 +373,7 @@ void historyDataSend(uint8_t module,const String &id,const String &range){
     for(unsigned i=0;i<tiers;i++)q.used[i]=hRings[i].used;
   }
   q.lastRequest=millis();
-  // readRaw() can serve HTTP from inside an ECU response wait. Keep that
-  // response short; stream the completed chart only between transactions.
+  // SD reads advance in historyQueryTick(); pending responses stay small.
   if(!q.ready||busy||jobConnect){
     web.send(202,"application/json","{\"ok\":false,\"code\":\"HISTORY_LOADING\",\"error\":\"Reading saved SD records\",\"retryAfterMs\":250,\"points\":[]}");return;
   }
