@@ -13,9 +13,14 @@ for obsolete in ['SPIFFS','hUsingSD','hFs','historyDataJson']:
 for obsolete in ['rememberItems','seenSamples','multiBrowserPoints','function multiSeries','trendRange="live"','source:\'browser\'','Flash history']:
     assert obsolete not in mobile,obsolete
 for page in [mobile,pi]:assert '<script src="/t1n-data.js"></script>' in page
-assert 'web.sendContent' not in sensors and 'web.sendContent' not in history
-assert 'sendScannerJson' in sensors and 'sendScannerJson' in history
-assert 'MSG_DONTWAIT' in read('firmware/t1n_obd/http_scanner.h')
+for source in [sensors,history]:
+    assert 'web.setContentLength(CONTENT_LENGTH_UNKNOWN)' in source
+    assert 'web.sendContent' in source and 'web.sendContent("")' in source
+    assert 'sendScannerJson' not in source
+for removed in ['bounded_http.h','http_json.h','http_scanner.h']:
+    assert not (ROOT/'firmware/t1n_obd'/removed).exists()
+assert 'httpMetrics' not in sensors
+assert 'char buffer_[256]' in read('firmware/t1n_obd/bounded_json.h')
 assert 'sensorsJson' not in sensors and 'String valueJson(' not in sensors
 assert 'template <typename Add> void forEachSensor' in sensors
 assert 'void historyObserveSensors()' in sensors and 'void sensorsSend()' in sensors

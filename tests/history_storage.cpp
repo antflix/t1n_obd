@@ -17,27 +17,15 @@ void historyObserveSensors(){}
 String jsonEscape(const String&s){return s;}
 void monitorPersistedSample(uint8_t){persisted++;}
 constexpr size_t CONTENT_LENGTH_UNKNOWN=~size_t(0);
-struct Web {int code=0;String body;
- void sendHeader(const char*,const char*){}void setContentLength(size_t){}
- void send(int c,const char*,const String&b){code=c;body=b;}
- void sendContent(const char*s,size_t n){body.append(s,n);}void sendContent(const char*){}
+struct Web {int code=0;String body;size_t contentLength=0,chunks=0;bool terminated=false;uint32_t chunkDelayMs=0;
+ void sendHeader(const char*,const char*){}void setContentLength(size_t length){contentLength=length;}
+ void send(int c,const char*,const String&b){code=c;body=b;chunks=0;terminated=false;}
+ void sendContent(const char*s,size_t n){
+  assert(code==200&&contentLength==CONTENT_LENGTH_UNKNOWN&&!terminated&&n<=256);
+  body.append(s,n);chunks++;ticks+=chunkDelayMs;
+ }
+ void sendContent(const char*s){assert(!*s&&!terminated);terminated=true;}
 }web;
-#include "http_json.h"
-struct TestResponse {
- std::string wire;
- static uint32_t now(void*){return ticks;}
- static ptrdiff_t send(const char *s,size_t n,void *p){static_cast<TestResponse*>(p)->wire.append(s,n);return n;}
- static void wait(void*){ticks++;}
- static void close(void*){}
-};
-template <typename Emit> void sendScannerJson(Emit emit){
- TestResponse socket;
- BoundedHttp response({&socket,TestResponse::now,TestResponse::send,TestResponse::wait,TestResponse::close});
- assert(writeHttpJson(response,emit));
- auto split=socket.wire.find("\r\n\r\n");assert(split!=std::string::npos);
- assert(socket.wire.find("Content-Length: "+std::to_string(socket.wire.size()-split-4)+"\r\n")!=std::string::npos);
- web.code=200;web.body=socket.wire.substr(split+4);
-}
 #include <time.h>
 time_t testEpoch=1793300000;
 time_t fakeTime(time_t*){return testEpoch;}
@@ -130,7 +118,14 @@ int main(){
  assert(web.body.find("\"count\":200")!=String::npos&&web.body.find("\"truncated\":true")!=String::npos);
  auto first=web.body.find("\"t\":"+String((uint32_t)testEpoch-199));
  auto last=web.body.find("\"t\":"+String((uint32_t)testEpoch));assert(first<last);
- assert(web.body.size()<30000&&web.body.find("\"schemaVersion\":1")!=String::npos);
+ assert(web.body.size()>8192&&web.body.size()<30000&&web.body.find("\"schemaVersion\":1")!=String::npos);
+ assert(web.terminated&&web.chunks>32);
+ // A draining client may need longer than 250 ms: never cut off valid JSON.
+ String completeResponse=web.body;web.chunkDelayMs=10;uint32_t started=ticks;
+ query(0,"rpm","1h");assert(ticks-started>250);
+ assert(web.code==200&&web.terminated&&web.body==completeResponse);
+ assert(web.body.find("\"count\":200")!=String::npos&&web.body.back()=='}');
+ web.chunkDelayMs=0;
  // The same SD query returns identical records after a simulated browser reload.
  String savedResponse=web.body;auto savedWrites=hSuccessfulWrites;
  query(0,"rpm","1h");assert(web.body==savedResponse&&hSuccessfulWrites==savedWrites);

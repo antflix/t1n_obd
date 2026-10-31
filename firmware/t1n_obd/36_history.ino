@@ -379,7 +379,8 @@ void historyDataSend(uint8_t module,const String &id,const String &range){
     web.send(202,"application/json","{\"ok\":false,\"code\":\"HISTORY_LOADING\",\"error\":\"Reading saved SD records\",\"retryAfterMs\":250,\"points\":[]}");return;
   }
   if(q.failed){q.active=false;historyQueryError(503,"HISTORY_READ_FAILED","Cannot read microSD history journal");return;}
-  sendScannerJson([&](BoundedJson &out){
+  web.setContentLength(CONTENT_LENGTH_UNKNOWN);web.send(200,"application/json","");
+  BoundedJson out([](const char *data,size_t length,void*){web.sendContent(data,length);});
   out.raw("{\"ok\":true,\"schemaVersion\":1,\"storage\":\"microSD\",\"module\":");out.integer(module);
   out.raw(",\"id\":");out.string(id.c_str());out.raw(",\"range\":");out.string(range.c_str());
   out.raw(",\"clockValid\":");out.raw(now?"true":"false");
@@ -394,7 +395,7 @@ void historyDataSend(uint8_t module,const String &id,const String &range){
   }
   out.raw("],\"count\":");out.integer(q.count);out.raw(",\"truncated\":");out.raw(q.truncated?"true":"false");
   out.raw(",\"recording\":{\"minimumChangeSeconds\":10,\"heartbeatSeconds\":1800}}");
-  });q=HistoryQuery();
+  out.flush();web.sendContent("");q=HistoryQuery();
 }
 bool historySetClock(uint32_t seconds){
   if(seconds<1609459200UL||seconds>=4102444800UL)return false;
