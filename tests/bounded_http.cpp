@@ -34,6 +34,28 @@ int main(){
   Socket packed;BoundedHttp packedResponse(packed.operations());
   assert(writeHttpJson(packedResponse,[](BoundedJson &out){out.raw("{\"value\":");out.string(std::string(12000,'x').c_str());out.raw("}");}));
   assert(packed.calls<=packed.body().size()/1436+3); // Header + full MSS chunks + tail.
+  // A selected history pair can exceed 32 KB; its encoder is still streamed
+  // through the same fixed MSS buffer and one shared response deadline.
+  Socket pair;BoundedHttp pairResponse(pair.operations());
+  auto emitPair=[](BoundedJson &out){
+    out.raw("{\"series\":[");
+    for(unsigned series=0;series<2;series++){
+      if(series)out.raw(",");
+      out.raw("{\"points\":[");
+      for(unsigned i=0;i<200;i++){
+        if(i)out.raw(",");
+        out.raw("{\"t\":1793300000,\"min\":-123456789.12345,\"avg\":123456789.12345,\"max\":987654321.12345,\"count\":4294967295,\"tier\":2}");
+      }
+      out.raw("]}");
+    }
+    out.raw("]}");
+  };
+  assert(writeHttpJson(pairResponse,emitPair));assert(pair.body().size()>40000);
+  assert(pair.wire.find("Content-Length: "+std::to_string(pair.body().size())+"\r\n")!=std::string::npos);
+  assert(pair.calls<=pair.body().size()/1436+3);
+  Socket stalledPair;stalledPair.blockAfter=18000;BoundedHttp stalledPairResponse(stalledPair.operations());
+  assert(!writeHttpJson(stalledPairResponse,emitPair));
+  assert(stalledPairResponse.durationMs()==250&&stalledPair.closed==1);
   Socket closeMeasured;closeMeasured.closeCost=7;BoundedHttp closedResponse(closeMeasured.operations());
   assert(closedResponse.begin(0)&&closedResponse.finish()&&closedResponse.durationMs()==7);
   // Short socket writes are completed without changing Content-Length or JSON.

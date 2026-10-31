@@ -301,40 +301,72 @@ String historyStatusJson(){
   return s+"]}";
 }
 // One bounded query at a time, advanced between diagnostic transactions.
-// Only records successfully persisted to SD enter this cache. The newest 200
-// records are returned chronologically; truncation is explicit to the client.
+// A selected pair shares one journal scan. Only persisted records enter the
+// result; each metric retains its newest 200 records in chronological order.
 struct HistoryPoint {HistoryRecord record;uint8_t tier;};
-static const unsigned HISTORY_QUERY_LIMIT=200;
-static HistoryPoint hQuery[HISTORY_QUERY_LIMIT];
+static const unsigned HISTORY_QUERY_LIMIT=200,HISTORY_QUERY_SERIES_LIMIT=2;
+static HistoryPoint hQuery[HISTORY_QUERY_SERIES_LIMIT][HISTORY_QUERY_LIMIT];
+static HistoryRecord hQueryBlock[16]; // One SD sector; fixed storage, no allocation.
+static_assert(sizeof(hQuery)==14400,"History query memory budget changed");
+struct HistorySeries {
+  char id[51]={};uint32_t key=0;unsigned count=0;bool truncated=false;
+};
 struct HistoryQuery {
-  bool active=false,ready=false,failed=false,truncated=false;
-  uint8_t module=0,tier=0;
-  uint16_t slot=0,used[3]={};unsigned count=0;
-  uint32_t lastRequest=0,now=0,after=0,key=0,corrupt=0;
-  String id,range;File file;
+  bool active=false,ready=false,failed=false;
+  uint8_t module=0,tier=0,seriesCount=0;
+  uint16_t slot=0,used[3]={};
+  uint32_t lastRequest=0,now=0,after=0,corrupt=0;
+  HistorySeries series[HISTORY_QUERY_SERIES_LIMIT];
+  String range;File file;
 };
 static HistoryQuery hQueryState;
+bool historyParseSelection(uint8_t module,const String &ids,HistorySeries *selected,unsigned &count){
+  count=0;const char *p=ids.c_str();
+  if(!*p)return false;
+  while(*p){
+    if(count==HISTORY_QUERY_SERIES_LIMIT)return false;
+    unsigned length=0;
+    while(*p&&*p!=','){
+      const char c=*p++;
+      if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='_'||c=='-')||length==50)return false;
+      selected[count].id[length++]=c;
+    }
+    if(!length)return false;
+    selected[count].id[length]='\0';
+    for(unsigned i=0;i<count;i++)if(strcmp(selected[i].id,selected[count].id)==0)return false;
+    selected[count].key=historyKey(module,selected[count].id);count++;
+    if(*p==','){p++;if(!*p)return false;}
+  }
+  return true;
+}
 void historyQueryTick(){
   HistoryQuery &q=hQueryState;
   if(!q.active)return;
   if(millis()-q.lastRequest>15000UL){if(q.file)q.file.close();q=HistoryQuery();return;}
   if(q.ready||busy||jobConnect)return;
   const uint32_t sliceStarted=millis();
-  for(unsigned step=0;step<128;step++){
+  for(unsigned step=0;step<128;){
     if(q.tier>=3){q.ready=true;break;}
     if(q.slot>=q.used[q.tier]){if(q.file)q.file.close();q.tier++;q.slot=0;continue;}
     if(!q.file){q.file=SD.open(historyPath(hRings[q.tier].path),"r");if(!q.file){q.failed=true;break;}}
-    HistoryRecord r;
-    if(q.file.read((uint8_t*)&r,sizeof(r))!=sizeof(r)){q.failed=true;break;}
-    q.slot++;
-    if(!historyValid(r)){q.corrupt++;}
-    else if(r.key==q.key&&historyInWindow(r,q.tier,q.after,q.now)){
-      unsigned pos=0;
-      while(pos<q.count&&historyNewer(hQuery[pos].record,hQuery[pos].tier,r,q.tier))pos++;
-      if(q.count==HISTORY_QUERY_LIMIT)q.truncated=true;else q.count++;
-      if(pos<HISTORY_QUERY_LIMIT){
-        for(unsigned j=q.count-1;j>pos;j--)hQuery[j]=hQuery[j-1];
-        hQuery[pos]={r,q.tier};
+    const unsigned records=min(16U,(unsigned)(q.used[q.tier]-q.slot));
+    const size_t bytes=records*sizeof(HistoryRecord);
+    if(q.file.read((uint8_t*)hQueryBlock,bytes)!=bytes){q.failed=true;break;}
+    q.slot+=records;step+=records;
+    for(unsigned i=0;i<records;i++){
+      const HistoryRecord &r=hQueryBlock[i];
+      if(!historyValid(r)){q.corrupt++;continue;}
+      if(!historyInWindow(r,q.tier,q.after,q.now))continue;
+      for(unsigned metric=0;metric<q.seriesCount;metric++){
+        HistorySeries &s=q.series[metric];
+        if(r.key!=s.key)continue;
+        HistoryPoint *points=hQuery[metric];unsigned pos=0;
+        while(pos<s.count&&historyNewer(points[pos].record,points[pos].tier,r,q.tier))pos++;
+        if(s.count==HISTORY_QUERY_LIMIT)s.truncated=true;else s.count++;
+        if(pos<HISTORY_QUERY_LIMIT){
+          for(unsigned j=s.count-1;j>pos;j--)points[j]=points[j-1];
+          points[pos]={r,q.tier};
+        }
       }
     }
     if(millis()-sliceStarted>=2)break;
@@ -344,11 +376,15 @@ void historyQueryTick(){
 }
 void historyQueryError(int status,const char *code,const char *message){
   // Fixed error strings keep even low-memory failures valid JSON.
-  web.send(status,"application/json",String("{\"ok\":false,\"code\":\"")+code+"\",\"error\":\""+message+"\",\"points\":[]}");
+  web.send(status,"application/json",String("{\"ok\":false,\"code\":\"")+code+"\",\"error\":\""+message+"\",\"series\":[]}");
 }
-void historyDataSend(uint8_t module,const String &id,const String &range){
+void historyDataSend(uint8_t module,const String &ids,const String &range){
   web.sendHeader("Cache-Control","no-store");
-  if(module>5||!id.length()||id.length()>50){historyQueryError(400,"INVALID_SENSOR","Invalid module or sensor ID");return;}
+  if(module>5){historyQueryError(400,"INVALID_SENSOR","Invalid module");return;}
+  HistorySeries selected[HISTORY_QUERY_SERIES_LIMIT];unsigned selectedCount=0;
+  if(!historyParseSelection(module,ids,selected,selectedCount)){
+    historyQueryError(400,"INVALID_SENSOR_SELECTION","Choose one or two distinct sensor IDs (letters, digits, underscore or hyphen; maximum 50 characters each)");return;
+  }
   if(range!="1h"&&range!="24h"&&range!="7d"&&range!="30d"&&range!="all"){
     historyQueryError(400,"INVALID_RANGE","Choose 1h, 24h, 7d, 30d or all");return;
   }
@@ -357,37 +393,44 @@ void historyDataSend(uint8_t module,const String &id,const String &range){
   if(!now&&range!="all"){historyQueryError(503,"CLOCK_INVALID","Clock unknown; choose all retained history");return;}
   HistoryQuery &q=hQueryState;
   if(q.active&&millis()-q.lastRequest>15000UL){if(q.file)q.file.close();q=HistoryQuery();}
-  bool same=q.active&&q.module==module&&q.id==id&&q.range==range;
+  bool same=q.active&&q.module==module&&q.seriesCount==selectedCount&&q.range==range;
+  if(same)for(unsigned i=0;i<selectedCount;i++)if(strcmp(q.series[i].id,selected[i].id)!=0)same=false;
   if(q.active&&!same){web.sendHeader("Retry-After","1");historyQueryError(503,"HISTORY_QUERY_BUSY","Another SD query is in progress");return;}
   if(!q.active){
-    q=HistoryQuery();q.active=true;q.module=module;q.id=id;q.range=range;
-    q.now=now?now:hLatestEpoch;q.key=historyKey(module,id.c_str());
+    q=HistoryQuery();q.active=true;q.module=module;q.range=range;q.seriesCount=selectedCount;
+    for(unsigned i=0;i<selectedCount;i++)q.series[i]=selected[i];
+    q.now=now?now:hLatestEpoch;
     uint32_t span=range=="1h"?3600UL:range=="24h"?86400UL:range=="7d"?604800UL:2592000UL;
     q.after=range=="all"?0:(now>span?now-span:0);
-    for(unsigned i=0;i<3;i++)q.used[i]=hRings[i].used;
+    const unsigned tiers=range=="1h"?1:range=="24h"?2:3;
+    for(unsigned i=0;i<tiers;i++)q.used[i]=hRings[i].used;
   }
   q.lastRequest=millis();
   // readRaw() can serve HTTP from inside an ECU response wait. Keep that
   // response short; stream the completed chart only between transactions.
   if(!q.ready||busy||jobConnect){
-    web.send(202,"application/json","{\"ok\":false,\"code\":\"HISTORY_LOADING\",\"error\":\"Reading saved SD records\",\"retryAfterMs\":250,\"points\":[]}");return;
+    web.send(202,"application/json","{\"ok\":false,\"code\":\"HISTORY_LOADING\",\"error\":\"Reading saved SD records\",\"retryAfterMs\":250,\"series\":[]}");return;
   }
   if(q.failed){q.active=false;historyQueryError(503,"HISTORY_READ_FAILED","Cannot read microSD history journal");return;}
   sendScannerJson([&](BoundedJson &out){
-  out.raw("{\"ok\":true,\"schemaVersion\":1,\"storage\":\"microSD\",\"module\":");out.integer(module);
-  out.raw(",\"id\":");out.string(id.c_str());out.raw(",\"range\":");out.string(range.c_str());
+  out.raw("{\"ok\":true,\"schemaVersion\":2,\"storage\":\"microSD\",\"module\":");out.integer(module);
+  out.raw(",\"range\":");out.string(range.c_str());
   out.raw(",\"clockValid\":");out.raw(now?"true":"false");
-  out.raw(",\"corruptRecordsSkipped\":");out.integer(q.corrupt);out.raw(",\"points\":[");
-  for(unsigned i=0;i<q.count;i++){
-    const HistoryPoint &p=hQuery[q.count-1-i];const HistoryRecord &r=p.record;
-    if(i)out.raw(",");
-    out.raw("{\"t\":");out.integer(r.epoch);
-    out.raw(",\"min\":");out.number(r.minimum);out.raw(",\"max\":");out.number(r.maximum);
-    out.raw(",\"avg\":");out.number(r.average);out.raw(",\"count\":");out.integer(r.samples);
-    out.raw(",\"tier\":");out.integer(p.tier);out.raw("}");
+  out.raw(",\"corruptRecordsSkipped\":");out.integer(q.corrupt);out.raw(",\"series\":[");
+  for(unsigned metric=0;metric<q.seriesCount;metric++){
+    const HistorySeries &s=q.series[metric];if(metric)out.raw(",");
+    out.raw("{\"id\":");out.string(s.id);out.raw(",\"points\":[");
+    for(unsigned i=0;i<s.count;i++){
+      const HistoryPoint &p=hQuery[metric][s.count-1-i];const HistoryRecord &r=p.record;
+      if(i)out.raw(",");
+      out.raw("{\"t\":");out.integer(r.epoch);
+      out.raw(",\"min\":");out.number(r.minimum);out.raw(",\"max\":");out.number(r.maximum);
+      out.raw(",\"avg\":");out.number(r.average);out.raw(",\"count\":");out.integer(r.samples);
+      out.raw(",\"tier\":");out.integer(p.tier);out.raw("}");
+    }
+    out.raw("],\"count\":");out.integer(s.count);out.raw(",\"truncated\":");out.raw(s.truncated?"true":"false");out.raw("}");
   }
-  out.raw("],\"count\":");out.integer(q.count);out.raw(",\"truncated\":");out.raw(q.truncated?"true":"false");
-  out.raw(",\"recording\":{\"minimumChangeSeconds\":10,\"heartbeatSeconds\":1800}}");
+  out.raw("],\"recording\":{\"minimumChangeSeconds\":10,\"heartbeatSeconds\":1800}}");
   });q=HistoryQuery();
 }
 bool historySetClock(uint32_t seconds){

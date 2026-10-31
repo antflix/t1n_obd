@@ -1,5 +1,7 @@
 # Shared SD data — 2026-10-30
 
+The versioned sections below record the original shared-data implementation. Current batched-query and ownership changes are documented in [batched_history_and_ownership_2026-10-31.md](batched_history_and_ownership_2026-10-31.md).
+
 Candidate **1.10.19-shared-sd-test** starts from the working **1.10.18-autolog-test** source (`8f8c7b8`). This is a focused data-flow replacement, not the later 1.10.28 development bundle. The replacement ESP32 was observed running 1.10.18 at `192.168.8.111`, with a connected engine session, live polling, mounted SD, and autonomous monitoring disabled, before this work.
 
 ## One data flow

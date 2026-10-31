@@ -30,8 +30,8 @@ const server=http.createServer((req,res)=>{
  }
  else if(u.pathname==='/api/history/data'){
   if((mode==='pending'||mode==='skewPending')&&pending++<(mode==='skewPending'?6:2)){code=202;data={ok:false,loading:true,code:'HISTORY_LOADING',error:'SD query loading'};}
-  else if(mode==='historyError'||mode==='storageError'){code=503;data={ok:false,code:'HISTORY_READ_FAILED',error:'Card read failed',points:[]};}
-  else data={ok:true,schemaVersion:1,storage:'microSD',module:Number(u.searchParams.get('module')),id:u.searchParams.get('id'),range:u.searchParams.get('range'),points:mode==='empty'?[]:points,count:mode==='empty'?0:2,truncated:mode==='truncated',recording:{minimumChangeSeconds:10,heartbeatSeconds:1800}};
+  else if(mode==='historyError'||mode==='storageError'){code=503;data={ok:false,code:'HISTORY_READ_FAILED',error:'Card read failed',series:[]};}
+  else data={ok:true,schemaVersion:2,storage:'microSD',module:Number(u.searchParams.get('module')),range:u.searchParams.get('range'),clockValid:true,corruptRecordsSkipped:0,series:u.searchParams.get('ids').split(',').map(id=>({id,points:mode==='empty'?[]:points,count:mode==='empty'?0:2,truncated:mode==='truncated'})),recording:{minimumChangeSeconds:10,heartbeatSeconds:1800}};
  }
  else if(u.pathname==='/api/history/status')data={storage:'microSD',available:mode!=='storageError',timeReady:true,successfulWrites:100,writeErrors:mode==='storageError'?1:0,error:mode==='storageError'?'Card read failed':'',clock:{valid:true,source:'fixture',jumps:0},tiers:[]};
  else if(u.pathname==='/api/sd/status')data={mounted:mode!=='storageError',capacityMiB:29808,usedMiB:100,error:mode==='storageError'?'Card read failed':''};
@@ -51,7 +51,9 @@ async function piTests(browser,name){
   await page.goto(base+'/pi');await page.waitForFunction(()=>document.querySelector('#gauges').textContent.includes('812'));
   await page.waitForFunction(()=>document.querySelector('#states').textContent.includes('SD history: available'));
   await screenshot(page,name+'-pi-dashboard');
+  const beforeTrend=requests.length;
   await page.click('[data-page="trends"]');await page.waitForFunction(()=>document.querySelector('#chart svg'));
+  assert.equal(requests.slice(beforeTrend).filter(p=>p.startsWith('/api/history/data')).length,1,'Pi pair must share one completed SD query');
   assert.equal(await page.evaluate(()=>state.series.length),2);
   assert.deepEqual(await page.evaluate(()=>state.series[0].points),points);
   assert.match(await page.evaluate(()=>T1NData.exportCsv(state.series)),/utc/i);
@@ -103,6 +105,7 @@ async function mobileTests(browser,name){
   assert.match(await page.locator('#trendPlot').textContent(),/chart appears automatically/);
   await page.waitForFunction(()=>document.querySelector('#trendPlot svg'));
   assert.equal(await page.evaluate(()=>multiData().length),2);
+  assert(requests.some(p=>p.includes('ids=rail%2CrailTarget')),'Mobile pair uses the shared batched history endpoint');
   assert.deepEqual(await page.evaluate(()=>multiData()[0].points),points);
   assert.equal(await page.locator('#trendPlot').getAttribute('aria-busy'),'false');
   assert.match(await page.locator('#allCards [data-metric-id="rail"] .compare').textContent(),/Live Δ unavailable/);

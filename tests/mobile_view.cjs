@@ -12,11 +12,11 @@ function element(id){
 function fixture(){
   const nodes=new Map(),requests=[],timers=[],views=['overview','live','faults','tests','modules','logs'];
   const get=id=>nodes.get(id)||(nodes.set(id,element(id)),nodes.get(id));
-  let active=0,network=true,historyAvailable=true,sensorsValid=true;
+  let active=0,network=true,historyAvailable=true,sensorsValid=true,automatic=false;
   const fetch=async(path,opts={})=>{
     requests.push({path,method:opts.method||'GET'});
     if(!network)throw Error('Scanner unreachable');
-    const status={moduleId:active,module:active===0?'Engine / CR2':'Transmission / EGS',connected:0,polling:0,firmware:'fixture',error:'ECU disconnected'};
+    const status={monitoringEnabled:automatic,moduleId:active,module:active===0?'Engine / CR2':'Transmission / EGS',connected:0,polling:0,firmware:'fixture',error:'ECU disconnected'};
     const q=new URL(path,'http://scanner').searchParams;
     let data;
     if(path==='/api/status')data=status;
@@ -27,8 +27,8 @@ function fixture(){
     else if(path==='/api/module/groups')data={groups:[]};
     else if(path==='/api/history/status')data={available:true,timeReady:true,storage:'microSD'};
     else if(path.startsWith('/api/history/data')){
-      if(!historyAvailable)return {ok:false,status:503,json:async()=>({ok:false,code:'SD_UNAVAILABLE',error:'SD removed',points:[]})};
-      data={ok:true,schemaVersion:1,storage:'microSD',module:Number(q.get('module')),id:q.get('id'),range:q.get('range'),points:[{t:1770000000,min:680,avg:700,max:720,count:5,tier:1}],count:1,truncated:false,recording:{minimumChangeSeconds:10,heartbeatSeconds:1800}};
+      if(!historyAvailable)return {ok:false,status:503,json:async()=>({ok:false,code:'SD_UNAVAILABLE',error:'SD removed',series:[]})};
+      data={ok:true,schemaVersion:2,storage:'microSD',module:Number(q.get('module')),range:q.get('range'),clockValid:true,corruptRecordsSkipped:0,series:q.get('ids').split(',').map(id=>({id,points:[{t:1770000000,min:680,avg:700,max:720,count:5,tier:1}],count:1,truncated:false})),recording:{minimumChangeSeconds:10,heartbeatSeconds:1800}};
     }else data={};
     return {ok:true,status:200,json:async()=>structuredClone(data),text:async()=>JSON.stringify(data)};
   };
@@ -39,16 +39,28 @@ function fixture(){
     T1NData:{...D,createClient:()=>D.createClient({fetchImpl:fetch})}});
   vm.runInContext(script,context);
   async function settle(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));}
-  return {context,requests,timers,get,settle,run:code=>vm.runInContext(code,context),setActive:n=>{active=n;},setNetwork:n=>{network=n;},setHistory:n=>{historyAvailable=n;},setSensors:n=>{sensorsValid=n;}};
+  return {context,requests,timers,get,settle,run:code=>vm.runInContext(code,context),setActive:n=>{active=n;},setNetwork:n=>{network=n;},setHistory:n=>{historyAvailable=n;},setSensors:n=>{sensorsValid=n;},setAutomatic:n=>{automatic=n;}};
 }
 (async()=>{
   const f=fixture();await f.settle();
   assert.equal(f.get('linkState').textContent,'Scanner online');assert.match(f.get('pollBadge').textContent,/ECU disconnected/);
   assert.equal(f.requests.some(r=>r.method==='POST'),false);
+  f.setAutomatic(true);await f.run('refresh()');
+  assert.match(f.get('operatingMode').innerHTML,/Automatic monitoring owns diagnostics/);
+  assert.equal(f.get('connectBtn').disabled,true);assert.equal(f.get('pollStopBtn').disabled,true);
+  assert.equal(f.requests.some(r=>r.method==='POST'),false);
+  f.setAutomatic(false);await f.run('refresh()');
+  assert.match(f.get('operatingMode').innerHTML,/Automatic monitoring paused/);
   await f.run("showView('modules');selectModule(2);historyLoadPromise");
   assert.equal(f.run('S.moduleId'),0);assert.equal(f.run('chartModule'),2);
   assert.equal(f.requests.some(r=>r.path.includes('module/select')),false);
   assert.equal(f.requests.some(r=>r.method==='POST'),false);assert.match(f.get('trendPlot').innerHTML,/<svg/);
+  const beforePair=f.requests.filter(r=>r.path.startsWith('/api/history/data')).length;
+  await f.run("showTrend('rail',0);historyLoadPromise");
+  const pairRequests=f.requests.filter(r=>r.path.startsWith('/api/history/data')).slice(beforePair);
+  assert.equal(pairRequests.length,1);
+  assert.equal(new URL(pairRequests[0].path,'http://scanner').searchParams.get('ids'),'rail,railTarget');
+  await f.run("showTrend('temp',2);historyLoadPromise");
   const records=f.run('JSON.stringify(multiData()[0].points)');
   f.setActive(2);await f.run('refresh()');assert.equal(f.run('chartModule'),2);
   f.setActive(0);await f.run('refresh()');assert.equal(f.run('chartModule'),2);assert.equal(f.run('selectedTrend'), 'temp');

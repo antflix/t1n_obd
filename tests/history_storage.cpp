@@ -60,6 +60,12 @@ void resetRings(){
  hRings[1]=HistoryRing{"/hist_15m.dat",32000};hRings[2]=HistoryRing{"/hist_day.dat",16000};
  hQueryState=HistoryQuery();
 }
+String savedSeries(const String &body,const String &id){
+ auto begin=body.find("{\"id\":\""+id+"\",\"points\":[");assert(begin!=String::npos);
+ auto counts=body.find("],\"count\":",begin);assert(counts!=String::npos);
+ auto end=body.find('}',counts);assert(end!=String::npos);
+ return body.substr(begin,end-begin+1);
+}
 int main(){
  // Missing SD is a visible failure; no other filesystem exists in this test.
  cardReady=false;historyBegin();assert(!hReady&&clockRequests==1);query(0,"rpm","24h");
@@ -124,11 +130,13 @@ int main(){
  // Bounded newest selection survives out-of-order timestamps and physical rollover.
  resetRings();hRings[0].capacity=240;
  for(unsigned j=1;j<=500;j++){auto rec=make(j,(uint32_t)testEpoch-500+j);assert(historyWrite(hRings[0],hRings[0].next,rec,true));}
+ SD.readCalls=0;SD.maxReadBytes=0;
  query(0,"rpm","1h");assert(web.code==200);
+ assert(SD.readCalls==15&&SD.maxReadBytes==512);
  assert(web.body.find("\"count\":200")!=String::npos&&web.body.find("\"truncated\":true")!=String::npos);
  auto first=web.body.find("\"t\":"+String((uint32_t)testEpoch-199));
  auto last=web.body.find("\"t\":"+String((uint32_t)testEpoch));assert(first<last);
- assert(web.body.size()<30000&&web.body.find("\"schemaVersion\":1")!=String::npos);
+ assert(web.body.size()<30000&&web.body.find("\"schemaVersion\":2")!=String::npos);
  // The same SD query returns identical records after a simulated browser reload.
  String savedResponse=web.body;auto savedWrites=hSuccessfulWrites;
  query(0,"rpm","1h");assert(web.body==savedResponse&&hSuccessfulWrites==savedWrites);
@@ -155,9 +163,83 @@ int main(){
  query(0,"rpm","7d");assert(web.body.find("\"count\":5")!=String::npos);
  query(0,"rpm","30d");assert(web.body.find("\"count\":6")!=String::npos);
  query(0,"rpm","all");assert(web.body.find("\"count\":7")!=String::npos);
+ // Short ranges never open irrelevant journals, including an unreadable old tier.
+ SD.files.erase("/t1nlogs/hist_day.dat");
+ SD.readCalls=0;query(0,"rpm","1h");assert(web.code==200&&SD.readCalls==1);
+ SD.readCalls=0;query(0,"rpm","24h");assert(web.code==200&&SD.readCalls==2);
+ query(0,"rpm","7d");assert(web.code==503);
+ resetRings();
+ // A full recent journal requires 2,000 sector reads rather than 32,000 tiny reads.
+ for(unsigned j=1;j<=32000;j++){auto rec=make(j,(uint32_t)testEpoch-j%3600);assert(historyWrite(hRings[0],hRings[0].next,rec,true));}
+ SD.readCalls=0;SD.maxReadBytes=0;historyDataSend(0,"rpm","1h");
+ historyQueryTick();assert(hQueryState.slot==128&&SD.readCalls==8);
+ busy=true;historyQueryTick();assert(hQueryState.slot==128&&SD.readCalls==8);busy=false;
+ while(!hQueryState.ready)historyQueryTick();
+ historyDataSend(0,"rpm","1h");assert(web.code==200&&SD.readCalls==2000&&SD.maxReadBytes==512);
+ // Corruption in a later block is skipped; incomplete final blocks are errors.
+ SD.files["/t1nlogs/hist_now.dat"][16*sizeof(HistoryRecord)+9]^=0x55;
+ query(0,"rpm","1h");assert(web.code==200&&web.body.find("\"corruptRecordsSkipped\":1")!=String::npos);
+ SD.files["/t1nlogs/hist_now.dat"].pop_back();query(0,"rpm","1h");assert(web.code==503);
+ resetRings();
+ // Selected metrics share one complete journal pass and retain independent
+ // newest-point limits. The combined result equals both individual results.
+ for(unsigned j=1;j<=32000;j++){
+   auto rec=make(j,(uint32_t)testEpoch-j%3600);
+   if(j%2)rec.key=historyKey(0,"railTarget");
+   assert(historyWrite(hRings[0],hRings[0].next,rec,true));
+ }
+ SD.readCalls=0;query(0,"rpm,railTarget","1h");
+ assert(web.code==200&&SD.readCalls==2000);
+ assert(web.body.find("\"schemaVersion\":2")!=String::npos);
+ String paired=web.body,rpmSeries=savedSeries(paired,"rpm"),targetSeries=savedSeries(paired,"railTarget");
+ assert(rpmSeries.find("\"count\":200,\"truncated\":true")!=String::npos);
+ assert(targetSeries.find("\"count\":200,\"truncated\":true")!=String::npos);
+ assert(paired.find("\"id\":\"rpm\"")<paired.find("\"id\":\"railTarget\""));
+ assert(sizeof(hQuery)==14400&&sizeof(hQueryBlock)==512&&paired.size()<40000);
+ SD.readCalls=0;query(0,"rpm","1h");assert(savedSeries(web.body,"rpm")==rpmSeries);
+ query(0,"railTarget","1h");assert(savedSeries(web.body,"railTarget")==targetSeries);
+ assert(SD.readCalls==4000);
+ std::cout<<"Paired history: 14,400 fixed result bytes; 400-point response "<<paired.size()<<" bytes; one pass 2,000 sector reads vs two passes 4,000 reads\n";
+ // Every sector is validated once, so corruption is counted once per query.
+ SD.files["/t1nlogs/hist_now.dat"][16*sizeof(HistoryRecord)+9]^=0x55;
+ query(0,"rpm,railTarget","1h");assert(web.code==200&&web.body.find("\"corruptRecordsSkipped\":1")!=String::npos);
+ // Reject malformed selections before occupying the single query slot or SD I/O.
+ for(const String &ids:{String(""),String(",rpm"),String("rpm,"),String("rpm,,railTarget"),String("rpm,rpm"),String("a,b,c"),String("rail target"),String("../rpm"),String(51,'a')}){
+   SD.readCalls=0;query(0,ids,"1h");
+   assert(web.code==400&&web.body.find("INVALID_SENSOR_SELECTION")!=String::npos&&!hQueryState.active&&SD.readCalls==0);
+ }
+ String longest(50,'a');query(0,longest,"1h");assert(web.code==200);
+ query(0,"g2101_02-AB","1h");assert(web.code==200);
+ // Different IDs, ID order, module or range cannot hijack an active query.
+ historyDataSend(0,"rpm,railTarget","1h");assert(web.code==202);
+ for(const String &ids:{String("rpm"),String("railTarget,rpm"),String("rpm,boost")}){
+   historyDataSend(0,ids,"1h");assert(web.code==503&&web.body.find("HISTORY_QUERY_BUSY")!=String::npos);
+ }
+ historyDataSend(1,"rpm,railTarget","1h");assert(web.code==503);
+ historyDataSend(0,"rpm,railTarget","24h");assert(web.code==503);
+ auto beforeSlot=hQueryState.slot;jobConnect=true;historyQueryTick();
+ assert(hQueryState.slot==beforeSlot&&!hQueryState.ready);jobConnect=false;
+ while(!hQueryState.ready)historyQueryTick();
+ jobConnect=true;historyDataSend(0,"rpm,railTarget","1h");assert(web.code==202&&hQueryState.ready);
+ jobConnect=false;historyDataSend(0,"rpm,railTarget","1h");assert(web.code==200&&!hQueryState.active);
+ // Multi-tier responses have identical per-series records for every range,
+ // including an absent selected metric; timestamps/gaps remain untouched.
+ resetRings();
+ for(int tier=0;tier<3;tier++)for(unsigned i=0;i<2;i++){
+   uint32_t age=tier==0?10:tier==1?4000:90000;
+   auto rec=make(i+1,(uint32_t)testEpoch-age-i*10);if(i)rec.key=historyKey(0,"railTarget");
+   assert(historyWrite(hRings[tier],hRings[tier].next,rec,true));
+ }
+ for(const String &range:{String("1h"),String("24h"),String("7d"),String("30d"),String("all")}){
+   query(0,"rpm,railTarget",range);assert(web.code==200);paired=web.body;
+   query(0,"rpm",range);assert(savedSeries(web.body,"rpm")==savedSeries(paired,"rpm"));
+   query(0,"railTarget",range);assert(savedSeries(web.body,"railTarget")==savedSeries(paired,"railTarget"));
+ }
+ query(0,"rpm,missing","all");assert(web.code==200&&savedSeries(web.body,"missing").find("\"points\":[],\"count\":0,\"truncated\":false")!=String::npos);
+ resetRings();
  query(1,"rpm","24h");assert(web.body.find("\"count\":0")!=String::npos);
  testEpoch=0;query(0,"rpm","1h");assert(web.code==503&&web.body.find("CLOCK_INVALID")!=String::npos);
- query(0,"rpm","all");assert(web.code==200&&web.body.find("\"clockValid\":false")!=String::npos);
+ query(0,"rpm,railTarget","all");assert(web.code==200&&web.body.find("\"clockValid\":false")!=String::npos);
  query(0,"rpm","invalid");assert(web.code==400);query(9,"rpm","all");assert(web.code==400);
  assert(!historySetClock(0));assert(!historySetClock(0xffffffff));
  std::cout<<"SD-only history: absent storage, failed reads/writes, backoff, checksum corruption, interrupted tails, rollover, dedup, bounded queries, ranges/gaps and invalid clock PASS\n";
