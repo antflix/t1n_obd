@@ -7,12 +7,18 @@
 struct Socket {
   uint32_t now=1000,sendCost=0,closeCost=0;
   size_t maxSend=65536,calls=0,closed=0,blockAfter=~size_t(0);
+  size_t temporaryStallAfter=~size_t(0);
+  uint32_t temporaryStallUntil=0;
   bool fatal=false;
   std::string wire;
   static uint32_t clock(void *p){return ((Socket*)p)->now;}
   static ptrdiff_t send(const char *data,size_t length,void *p){
     auto &s=*(Socket*)p;s.calls++;s.now+=s.sendCost;
     if(s.fatal)return -1;
+    if(s.now<s.temporaryStallUntil){
+      if(s.wire.size()>=s.temporaryStallAfter)return 0;
+      length=std::min(length,s.temporaryStallAfter-s.wire.size());
+    }
     if(s.wire.size()>=s.blockAfter)return 0;
     const size_t n=std::min({length,s.maxSend,s.blockAfter-s.wire.size()});
     s.wire.append(data,n);return (ptrdiff_t)n;
@@ -53,6 +59,27 @@ int main(){
   assert(writeHttpJson(pairResponse,emitPair));assert(pair.body().size()>40000);
   assert(pair.wire.find("Content-Length: "+std::to_string(pair.body().size())+"\r\n")!=std::string::npos);
   assert(pair.calls<=pair.body().size()/1436+3);
+  // Temporary socket backpressure can clear before the absolute deadline;
+  // the real serializer must then complete the exact same header and body.
+  const size_t pairHeaderBytes=pair.wire.size()-pair.body().size();
+  Socket delayedPair;delayedPair.temporaryStallAfter=pairHeaderBytes+4308;
+  delayedPair.temporaryStallUntil=delayedPair.now+240;
+  BoundedHttp delayedPairResponse(delayedPair.operations());
+  assert(writeHttpJson(delayedPairResponse,emitPair));
+  assert(delayedPair.wire==pair.wire&&delayedPairResponse.durationMs()==240);
+  assert(delayedPairResponse.error()==BoundedHttp::Error::None&&delayedPair.closed==1);
+  // An otherwise identical temporary delay beyond 250 ms is explicitly cut
+  // off, even though the socket would become writable again shortly after.
+  Socket latePair;latePair.temporaryStallAfter=pairHeaderBytes+4308;
+  latePair.temporaryStallUntil=latePair.now+260;
+  BoundedHttp latePairResponse(latePair.operations());
+  assert(!writeHttpJson(latePairResponse,emitPair));
+  assert(latePairResponse.error()==BoundedHttp::Error::Timeout);
+  assert(latePairResponse.durationMs()==250&&latePair.closed==1);
+  assert(latePair.body().size()==4308&&latePair.wire==pair.wire.substr(0,latePair.wire.size()));
+  const auto lateCalls=latePair.calls;latePair.now=latePair.temporaryStallUntil;
+  assert(!latePairResponse.write("x",1)&&!latePairResponse.finish());
+  assert(latePair.calls==lateCalls&&latePair.closed==1);
   Socket stalledPair;stalledPair.blockAfter=18000;BoundedHttp stalledPairResponse(stalledPair.operations());
   assert(!writeHttpJson(stalledPairResponse,emitPair));
   assert(stalledPairResponse.durationMs()==250&&stalledPair.closed==1);
@@ -97,5 +124,5 @@ int main(){
   Socket capped;capped.blockAfter=0;BoundedHttp c(capped.operations(),10000);
   assert(!c.begin(1)&&c.durationMs()==250);
   Socket empty;BoundedHttp e(empty.operations());assert(e.begin(0)&&e.finish()&&empty.body().empty());
-  std::cout<<"Bounded HTTP partial writes, stalled peer, slow progress, abort, exact length and rollover PASS\n";
+  std::cout<<"Bounded HTTP partial writes, temporary backpressure, stalled peer, slow progress, abort, exact length and rollover PASS\n";
 }
