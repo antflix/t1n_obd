@@ -65,3 +65,62 @@ before sending any pause, firmware or asset request. A single-attempt installer
 was then queued to start when scanner HTTP returns. Installation and hardware
 results must be recorded after actual completion; no success is inferred from
 source restoration or a queued process.
+
+## Actual installation and failed qualification
+
+The queued single attempt subsequently succeeded: OTA returned HTTP200
+`Firmware installed. Rebooting...`; the installed version was checked as
+`1.10.24-history-read-test`. All four SD assets passed SHA-256 readback. The
+engine connected and polling started. At uptime 8,710 ms, status reported 96,964
+free heap bytes, 3,804 minimum stack bytes, zero HTTP errors/timeouts and 58 ms
+maximum JSON send time. Automatic monitoring remained disabled as intended.
+
+This did **not** qualify the rollback as stable. The Pi completed its 19119-byte
+`/pi` document in 171 ms but remained blocked on `/t1n-data.js`; both computers
+then lost HTTP and ARP access before the parent's chart test started. The
+initial passive SD-write check could not complete. Thus removing versions25–27
+alone did not eliminate the observed failure.
+
+## Serial capture with the ESP32 attached to Pi USB
+
+The user connected the scanner's CP2102 USB bridge to the Pi. Capture used the
+existing 115200-baud console, without sending serial commands or flashing any
+firmware. The capture contains a normal `POWERON_RESET` boot at 20:50:22 UTC and
+no later panic, backtrace, brownout or watchdog message during its ten minutes.
+USB/serial attachment can affect reset and power conditions; do not equate this
+boot with an unexplained spontaneous reset. The user reports the prior supply
+was a 12V-to-5V buck converter; its relationship to the USB supply still matters.
+
+With diagnostics disconnected, the Pi loaded fully in 250 ms; its shared script
+completed in approximately 20 ms and 30 seconds of GET-only polling passed.
+One host GET also received the 16116-byte shared script in 38 ms. The parent then
+connected only the engine and retained the same USB connection and firmware.
+An initial 60-second check showed 154→275 successful SD writes, zero SD errors,
+continuous uptime and an uninterrupted engine session.
+
+The ordinary mobile chart check failed: rail-target history and sensor requests
+returned `ERR_CONTENT_LENGTH_MISMATCH`; the UI correctly reported a history
+error rather than substituting browser data. Pi polling also showed five content
+length mismatches during one 60-second observation. Status remained connected,
+with 17 HTTP send timeouts, 1,532 minimum stack bytes and no reset at uptime 378,556
+ms. This independently confirms the 250 ms absolute-send cutoff remains a chart
+and live-data problem in version24. No deadline extension was installed.
+
+Around 20:59 UTC, HTTP/ping/ARP at the station address failed again while the
+existing serial log continued normal engine TX/RX through 21:00:22 UTC and
+diagnostic uptime 599,496 ms. Therefore this observed outage did not stop the
+application or require a processor reset to explain it. It does not establish
+whether the remaining failure is Wi-Fi association, router forwarding, or the
+ESP32 networking stack. Check the private serial summary for transaction counts
+and measured request timing; the configured 300 ms pause was not changed.
+
+At 21:06:25 UTC, a fresh Pi scan still saw `T1N-Scanner`, BSSID
+`20:50:0d:d2:9c:a5`, at -43 dBm on channel 2. The AP beacon proves radio activity,
+not functioning IP or HTTP. The Pi stayed associated to AntNet and its settings,
+HUD tab, SSH and touchscreen were preserved. Direct AP access from the user's
+phone was requested without resetting the scanner, to distinguish the station
+path from the shared IP/HTTP implementation. That result is still pending.
+
+Raw console output and build images remain private. Runtime source stays exactly
+version24 on this branch; the failure has not been hidden by a new retry,
+fallback, forced reset, changed polling interval or automatic reconnection layer.
