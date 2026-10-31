@@ -17,4 +17,5 @@ with tempfile.TemporaryDirectory(prefix='t1n-shared-checks-') as folder:
 for test in ['shared_client','mobile_view','pi_view']:
     run('node','tests/'+test+'.cjs')
 run(sys.executable,'tests/shared_source.py')
+run(sys.executable,'tests/transport_isolation.py')
 print('Offline shared SD data checks PASS')
