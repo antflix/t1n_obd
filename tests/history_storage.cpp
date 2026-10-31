@@ -30,10 +30,11 @@ struct TestResponse {
  static void wait(void*){ticks++;}
  static void close(void*){}
 };
+static BoundedJson::Workspace httpJsonWorkspace;
 template <typename Emit> void sendScannerJson(Emit emit){
  TestResponse socket;
  BoundedHttp response({&socket,TestResponse::now,TestResponse::send,TestResponse::wait,TestResponse::close});
- assert(writeHttpJson(response,emit));
+ assert(writeHttpJson(response,httpJsonWorkspace,emit));
  auto split=socket.wire.find("\r\n\r\n");assert(split!=std::string::npos);
  assert(socket.wire.find("Content-Length: "+std::to_string(socket.wire.size()-split-4)+"\r\n")!=std::string::npos);
  web.code=200;web.body=socket.wire.substr(split+4);
