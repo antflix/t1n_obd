@@ -1,3 +1,5 @@
+// Shared negative-response descriptions, also used by HVAC diagnostics.
+String kwpNrcText(uint8_t nrc){switch(nrc){case 0x10:return"General reject";case 0x11:return"Service not supported";case 0x12:return"Sub-function not supported";case 0x21:return"Busy / repeat request";case 0x22:return"Conditions not correct";case 0x31:return"Request out of range";case 0x33:return"Security access denied";case 0x35:return"Invalid key";case 0x36:return"Exceeded attempts";case 0x37:return"Required delay not expired";case 0x78:return"Response pending";default:return"Unknown NRC 0x"+hex2(nrc);}}
 // ---------------- Live data ----------------
 uint16_t be16(const uint8_t*p){return((uint16_t)p[0]<<8)|p[1];}
 String metricLine(const String&name,double value,const String&unit,int decimals=1){return name+": "+String(value,decimals)+(unit.length()?" "+unit:"")+"\n";}
