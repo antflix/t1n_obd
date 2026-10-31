@@ -97,7 +97,7 @@ void sdUploadChunk() {
     sdUploadName=web.arg("name");
     if(!sdAllowedName(sdUploadName)){sdUploadError="Unsupported filename";return;}
     if(!sdReady){sdUploadError="microSD is not mounted";return;}
-    if(busy||jobConnect||diagnosticSession){sdUploadError="Disconnect scanner before SD upload";return;}
+    if(busy||diagnosticSession){sdUploadError="Disconnect scanner before SD upload";return;}
     String part="/www/"+sdUploadName+".part";
     SD.remove(part);
     sdUploadFile=SD.open(part,FILE_WRITE);

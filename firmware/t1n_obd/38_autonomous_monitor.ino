@@ -16,21 +16,13 @@ struct MonModule {
   uint8_t statuses[32]={};
 };
 static MonModule monModules[6];
-static bool monEnabled=false,monOwnSession=false;
-static uint32_t monStartMs=0,monRetryMs=0,monHoldUntil=0;
-static uint32_t monEgsDue=0,monAbsDue=0,monHzrDue=0;
+static bool monOwnSession=false;
+static uint32_t monStartMs=0,monRetryMs=0;
+static uint32_t monEgsDue=0,monHzrDue=0;
 static ModuleId monTarget=MOD_ENGINE;
 static uint32_t monDtcEvents=0,monLastClockLogMs=0;
 static String monLastError="";
 
-bool monitorManualHold(){
-  return monHoldUntil && (int32_t)(monHoldUntil-millis())>0;
-}
-void monitorManualOverride(){
-  // User-directed diagnostic sessions win over the background scheduler.
-  monHoldUntil=millis()+300000UL;
-  monOwnSession=false;
-}
 void monitorPersistedSample(uint8_t mod){
   if(mod<6)monModules[mod].recentWrites++;
 }
@@ -123,24 +115,16 @@ void monitorDtcSnapshot(uint8_t mod,const uint16_t *codes,const uint8_t *statuse
   // Unsupported/failed reads never enter this function.
 }
 void monitorBegin(){
-  Preferences p;
-  if(p.begin("t1nmonitor",true)){monEnabled=p.getBool("enabled",false);p.end();}
   monitorLoadDtcSnapshots();
   uint32_t now=millis();
-  monRetryMs=now+12000UL;monEgsDue=now+240000UL;
-  monAbsDue=now+600000UL;monHzrDue=now+900000UL;
+  monRetryMs=now+1000UL;monEgsDue=now+240000UL;
+  monHzrDue=now+900000UL;
 }
-void monitorSetEnabled(bool enable){
-  monEnabled=enable;
-  if(!enable){monOwnSession=false;monTarget=MOD_ENGINE;}
-  else {monRetryMs=millis()+1000UL;monTarget=MOD_ENGINE;}
-  Preferences p;if(p.begin("t1nmonitor",false)){p.putBool("enabled",enable);p.end();}
-}
+
 void monitorStart(ModuleId mod){
   // Never switch during an active diagnostic/test operation.
-  if(busy||jobConnect||hzrFanOverrideActive)return;
+  if(busy||hzrFanOverrideActive)return;
   if(diagnosticSession)disconnectCurrentModule();
-  autoReconnect=false;reconnectAtMs=0;
   requestedModule=mod;
   bool ok=connectModule(mod);
   uint32_t now=millis();
@@ -154,7 +138,7 @@ void monitorStart(ModuleId mod){
     monOwnSession=false;
     return;
   }
-  monTarget=mod;monOwnSession=true;monStartMs=now;
+  monTarget=mod;monOwnSession=true;monStartMs=now;monLastError="";
   MonModule &m=monModules[(uint8_t)mod];
   m.connects++;m.lastConnectionMs=now;
   monitorLog("CONNECTED",mod,moduleName(mod));
@@ -171,12 +155,8 @@ void monitorTick(){
     monitorLog("CLOCK",monTarget,
       String("epoch=")+historyNow()+";source="+historyClockJson());
   }
-  if(!monEnabled||monitorManualHold()||busy||jobConnect||hzrFanOverrideActive)return;
+  if(busy||hzrFanOverrideActive)return;
   uint32_t now=millis();
-  if(!monOwnSession&&diagnosticSession){
-    // Existing manually initiated session: don't seize it until disconnect.
-    return;
-  }
   if(!diagnosticSession){
     // A dropped session is not a clean scheduled disconnect. Back off
     // instead of retrying on every 2-ms loop iteration.
@@ -190,7 +170,6 @@ void monitorTick(){
     if((int32_t)(now-monRetryMs)>=0)monitorStart(monTarget);
     return;
   }
-  autoReconnect=false;reconnectAtMs=0;
   if(activeModule!=monTarget)return;
   if(activeModule!=MOD_ENGINE){
     uint32_t limit=activeModule==MOD_EGS?12000UL:8000UL;
@@ -202,22 +181,12 @@ void monitorTick(){
   if((int32_t)(now-monEgsDue)>=0){
     monEgsDue=now+240000UL;monitorStart(MOD_EGS);return;
   }
-  // Do not enter ABS diagnostic mode automatically while driving until
-  // its side effects have been vehicle-qualified. A speed reading must be
-  // fresh; missing/stale speed never implies that the vehicle is parked.
-  bool stationary=engSpeed.valid && !stale(engSpeed,5000)
-    && engSpeed.value>=0 && engSpeed.value<1.0
-    && engRpm.valid && !stale(engRpm,5000) && engRpm.value>450;
-  if(stationary && (int32_t)(now-monAbsDue)>=0){
-    monAbsDue=now+600000UL;monitorStart(MOD_ABS);return;
-  }
   if((int32_t)(now-monHzrDue)>=0){
     monHzrDue=now+900000UL;monitorStart(MOD_HZR);return;
   }
 }
 String monitorStatusJson(){
-  String s="{\"enabled\":"+String(monEnabled?"true":"false")
-    +",\"manualHold\":"+String(monitorManualHold()?"true":"false")
+  String s=String("{\"enabled\":true")
     +",\"active\":"+String(monOwnSession?"true":"false")
     +",\"target\":"+String((int)monTarget)
     +",\"clock\":"+historyClockJson()
@@ -246,7 +215,7 @@ bool monitorStorageSelfTest(String &report){
   if(!sdCardReady()||!hReady){
     report="SD history backend unavailable";return false;
   }
-  if(busy||jobConnect||diagnosticSession){
+  if(busy||diagnosticSession){
     report="Disconnect ECU before storage self-test";return false;
   }
   const uint8_t modules[]={0,2,1,3};

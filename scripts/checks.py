@@ -18,4 +18,5 @@ for test in ['shared_client','mobile_view','pi_view']:
     run('node','tests/'+test+'.cjs')
 run(sys.executable,'tests/shared_source.py')
 run(sys.executable,'tests/transport_isolation.py')
+run(sys.executable,'tests/automatic_monitor.py')
 print('Offline shared SD data checks PASS')

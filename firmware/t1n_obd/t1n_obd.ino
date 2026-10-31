@@ -43,8 +43,6 @@ void monitorDtcSnapshot(uint8_t mod,const uint16_t* codes,const uint8_t* statuse
 void monitorPersistedSample(uint8_t mod);
 void monitorBegin();
 void monitorTick();
-void monitorManualOverride();
-void monitorSetEnabled(bool on);
 bool monitorStorageSelfTest(String &report);
 bool monitorDtcSelfTest(String &report);
 String monitorStatusJson();
@@ -56,7 +54,7 @@ int RX_PIN = 14;
 static const bool TX_DRIVE_LOW_HIGH = false; // TLIN1027 TXD LOW drives dominant
 static const bool RX_HIGH_MEANS_K_HIGH = true;
 
-static const char* FIRMWARE_VERSION = "1.10.29-uart-http-isolation-test";
+static const char* FIRMWARE_VERSION = "1.10.30-automatic-cr2-test";
 WebServer web(80);
 HardwareSerial KL(2);
 Preferences prefs;
@@ -134,7 +132,6 @@ String apPASS   = "sprinter123";
 
 // ---------------- State ----------------
 volatile bool uartAttached = false;
-volatile bool jobConnect = false;
 volatile bool busy = false;
 bool cr2Connected = false;
 bool diagnosticSession = false;
@@ -153,8 +150,6 @@ bool manualRelayTest(int idx,String &result);
 ModuleId activeModule = MOD_ENGINE;
 uint8_t activeEcuAddr = 0x12;
 ModuleId requestedModule = MOD_ENGINE;
-bool autoReconnect = true;
-uint32_t reconnectAtMs = 0;
 uint8_t consecutiveRequestFailures = 0;
 
 struct ValueState {
@@ -198,12 +193,6 @@ String egsVariantRaw = "";
 String egsIdentRaw = "";
 String logText = "";
 String activityLogText = "";
-
-struct RxEvent { uint32_t us; uint8_t b; };
-static const size_t EVENT_MAX = 1024;
-RxEvent events[EVENT_MAX];
-size_t eventCount = 0;
-uint32_t replayT0 = 0;
 
 struct LiveGroup {
   uint8_t id;

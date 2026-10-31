@@ -30,7 +30,7 @@ String runSharedProbe(unsigned i){
   const SharedProbeTarget &t=sharedTargets[i];
   int ch=-1;for(int k=0;k<4;k++)if(K_OBD[k]==t.obd)ch=k;
   if(ch<0)return "{\"error\":\"OBD channel not wired\"}";
-  busy=true;autoReconnect=false;reconnectAtMs=0;livePolling=false;diagnosticSession=false;cr2Connected=false;
+  busy=true;livePolling=false;diagnosticSession=false;cr2Connected=false;
   allRelaysOff();TX_PIN=K_TX[ch];RX_PIN=K_RX[ch];pinMode(RX_PIN,INPUT_PULLUP);
   activeEcuAddr=t.address;
   releaseKL();delay(cfg.preIdleMs);
@@ -52,8 +52,6 @@ String runSharedProbe(unsigned i){
   activity("Shared K-line probe "+String(t.name)+" OBD"+String(t.obd)+" TX "+txHex+" RX "+rxHex+" ECU "+ecuHex);
   return "{\"target\":\""+jsonEscape(t.name)+"\",\"obdPin\":"+String(t.obd)+",\"address\":\"0x"+hex2(t.address)+"\",\"rxGpio\":"+String(K_RX[ch])+",\"txGpio\":"+String(K_TX[ch])+",\"idleHigh\":"+String(idle==HIGH?1:0)+",\"drivenLow\":"+String(low==LOW?1:0)+",\"releasedHigh\":"+String(high==HIGH?1:0)+",\"tx\":\""+txHex+"\",\"rawRx\":\""+rxHex+"\",\"ecuFrame\":\""+ecuHex+"\",\"accepted\":"+String(ok?"true":"false")+"}";
 }
-
-
 
 // Read-only software RX for the asymmetric OBD15 waveform. Analyzer measurements
 // show RXD falling edges ~11us late and rising edges ~75us late. UART byte
@@ -161,7 +159,7 @@ String runPin15TimingTest(int fallAdvance,int riseAdvance,uint8_t address){
      riseAdvance-fallAdvance>85)
     return "{\"error\":\"Invalid timing parameters\"}";
   if(K_OBD[1]!=15)return "{\"error\":\"Chip 2 is not on OBD15\"}";
-  busy=true;autoReconnect=false;reconnectAtMs=0;
+  busy=true;
   livePolling=false;diagnosticSession=false;cr2Connected=false;
   allRelaysOff();TX_PIN=K_TX[1];RX_PIN=K_RX[1];pinMode(RX_PIN,INPUT_PULLUP);
   releaseKL();delay(cfg.preIdleMs);

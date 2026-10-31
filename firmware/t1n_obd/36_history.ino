@@ -319,7 +319,7 @@ void historyQueryTick(){
   HistoryQuery &q=hQueryState;
   if(!q.active)return;
   if(millis()-q.lastRequest>15000UL){if(q.file)q.file.close();q=HistoryQuery();return;}
-  if(q.ready||busy||jobConnect)return;
+  if(q.ready||busy)return;
   const uint32_t sliceStarted=millis();
   for(unsigned step=0;step<128;){
     if(q.tier>=3){q.ready=true;break;}
@@ -374,7 +374,7 @@ void historyDataSend(uint8_t module,const String &id,const String &range){
   }
   q.lastRequest=millis();
   // SD reads advance in historyQueryTick(); pending responses stay small.
-  if(!q.ready||busy||jobConnect){
+  if(!q.ready||busy){
     web.send(202,"application/json","{\"ok\":false,\"code\":\"HISTORY_LOADING\",\"error\":\"Reading saved SD records\",\"retryAfterMs\":250,\"points\":[]}");return;
   }
   if(q.failed){q.active=false;historyQueryError(503,"HISTORY_READ_FAILED","Cannot read microSD history journal");return;}

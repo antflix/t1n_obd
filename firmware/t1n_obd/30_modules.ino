@@ -1,5 +1,5 @@
 String boolState(uint8_t raw,const char*offText,const char*onText){if(raw==0)return String(offText);if(raw==0xFF)return String(onText);return"Raw 0x"+hex2(raw);}
-void markSessionLost(const String&why){if(activeModule==MOD_HZR&&hzrFanOverrideActive){hzrFanOverrideActive=false;activity("WARNING: HVAC session lost during fan override. If fan continues, cycle ignition to restore normal control.");}diagnosticSession=false;cr2Connected=false;livePolling=false;lastError=why;releaseKL();allRelaysOff();activity("Diagnostic session lost: "+why);setStatus("SESSION LOST");if(autoReconnect)reconnectAtMs=millis()+2000;}
+void markSessionLost(const String&why){if(activeModule==MOD_HZR&&hzrFanOverrideActive){hzrFanOverrideActive=false;activity("WARNING: HVAC session lost during fan override. If fan continues, cycle ignition to restore normal control.");}diagnosticSession=false;cr2Connected=false;livePolling=false;lastError=why;releaseKL();allRelaysOff();activity("Diagnostic session lost: "+why);setStatus("SESSION LOST");}
 void notePollResult(bool ok){if(ok){consecutiveRequestFailures=0;return;}if(++consecutiveRequestFailures>=3)markSessionLost("Three consecutive diagnostic requests failed");}
 String egsAsciiId(const uint8_t*p,size_t n){String s="";for(size_t i=0;i<n&&i<4;i++){uint8_t b=p[i];s+=(b>=32&&b<=126)?String((char)b):".";}return s;}
 bool readEgsIdentification(){
@@ -28,47 +28,29 @@ bool readEgsIdentification(){
   activity("EGS variant identified via 30 01 01"+(egsVariantId.length()?": "+egsVariantId:"")+(egsVariantRaw.length()?" · raw "+egsVariantRaw:""));
   lastError="";return true;
 }
-bool connectFastModule(ModuleId module){activity("Connecting to "+moduleName(module)+" at address 0x"+hex2(moduleAddr(module))+" on OBD pin "+String(moduleObdPin(module)));busy=true;livePolling=false;diagnosticSession=false;cr2Connected=false;activeModule=module;requestedModule=module;activeEcuAddr=moduleAddr(module);consecutiveRequestFailures=0;keepaliveMisses=0;lastError="";setStatus("CONNECTING - "+moduleName(module));releaseKL();delay(cfg.preIdleMs);int rxIdle=digitalRead(RX_PIN);pinMode(TX_PIN,OUTPUT);digitalWrite(TX_PIN,gpioForKLow());delayMicroseconds(2000);int rxLow=digitalRead(RX_PIN);delayMicroseconds(23000);digitalWrite(TX_PIN,gpioForKHigh());delayMicroseconds(2000);int rxRelease=digitalRead(RX_PIN);delayMicroseconds(23000);uint8_t startPayload[1]={0x81},tx[16];size_t tn=buildKwpFrame(startPayload,1,tx,sizeof(tx));if(moduleObdPin(module)==15){sendPin15CompensatedFrame(tx,tn);}else{uartOn();flushRx();sendSpacedBytes(tx,tn);}uint8_t raw[256],frame[128];size_t fn=0;size_t rn=moduleObdPin(module)==15?readPin15CompensatedResponse(raw,sizeof(raw),frame,fn,sizeof(frame),900):readUntilEcuFrame(raw,sizeof(raw),frame,fn,sizeof(frame),900);lastRxHex=bytesHex(raw,rn);activity("K-line RXD levels: idle="+String(rxIdle==HIGH?"HIGH":"LOW")+", driven low="+String(rxLow==HIGH?"HIGH":"LOW")+", released="+String(rxRelease==HIGH?"HIGH":"LOW")+" (RX GPIO"+String(RX_PIN)+", TX GPIO"+String(TX_PIN)+")");logx(rn?"START RX RAW "+lastRxHex:"START RX RAW <nothing>");if(!rn||!fn){lastError="No valid StartCommunication response from "+moduleName(module);logx("START RX ECU <none>");activity("Connection failed: "+lastError+(rn?"; raw RX "+lastRxHex:"; no RX bytes"));setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START RX ECU "+bytesHex(frame,fn));const uint8_t*rp=nullptr;size_t rpn=0;if(!responsePayload(frame,fn,rp,rpn)||rpn<1||rp[0]!=0xC1){lastError="Unexpected StartCommunication response: "+bytesHex(frame,fn);logx("START response rejected; expected positive service C1");activity("Connection failed: "+lastError);setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START response accepted: positive service C1 from 0x"+hex2(moduleAddr(module)));activity("StartCommunication accepted by "+moduleName(module)+": "+bytesHex(frame,fn));lastRxHex=bytesHex(frame,fn);lastGoodTrafficMs=millis();p3ReadyAtMs=millis()+cfg.p3MinMs;diagnosticSession=true;cr2Connected=(module==MOD_ENGINE);keepaliveMisses=0;if(module==MOD_EGS)readEgsIdentification();if(module==MOD_HZR||module==MOD_KI||module==MOD_EWM){livePolling=true;nextPollMs=millis()+150;lastError="";activity(moduleName(module)+" connected; verified read-only data groups available.");setStatus("CONNECTED - "+moduleName(module));busy=false;return true;}if(module==MOD_ABS){absKm20=false;absPartId="";uint8_t q[2]={0x3C,0x00},r[96];size_t n=0;const uint8_t*p=nullptr;size_t pn=0;if(sendKwpPayload(q,2,r,n,900)&&responsePayload(r,n,p,pn)&&pn>=7&&p[0]==0x7C&&p[1]==0){absPartId=bytesHex(p+2,5);absKm20=p[2]==0&&p[3]==4&&p[4]==0x46&&p[5]==0x64&&p[6]==0x89;}livePolling=true;autoReconnect=false;nextPollMs=millis()+150;lastError="";activity("ABS "+absPartId+(absKm20?" KM20":" variant not mapped"));setStatus("CONNECTED - ABS LIVE DATA");busy=false;return true;}activity("Connected to "+moduleName(module)+". Live polling started.");setStatus("CONNECTED - "+moduleName(module));livePolling=true;nextPollMs=millis()+80;busy=false;return true;}
+bool connectFastModule(ModuleId module){activity("Connecting to "+moduleName(module)+" at address 0x"+hex2(moduleAddr(module))+" on OBD pin "+String(moduleObdPin(module)));busy=true;livePolling=false;diagnosticSession=false;cr2Connected=false;activeModule=module;requestedModule=module;activeEcuAddr=moduleAddr(module);consecutiveRequestFailures=0;keepaliveMisses=0;lastError="";setStatus("CONNECTING - "+moduleName(module));releaseKL();delay(cfg.preIdleMs);int rxIdle=digitalRead(RX_PIN);pinMode(TX_PIN,OUTPUT);digitalWrite(TX_PIN,gpioForKLow());delayMicroseconds(2000);int rxLow=digitalRead(RX_PIN);delayMicroseconds(23000);digitalWrite(TX_PIN,gpioForKHigh());delayMicroseconds(2000);int rxRelease=digitalRead(RX_PIN);delayMicroseconds(23000);uint8_t startPayload[1]={0x81},tx[16];size_t tn=buildKwpFrame(startPayload,1,tx,sizeof(tx));if(moduleObdPin(module)==15){sendPin15CompensatedFrame(tx,tn);}else{uartOn();flushRx();sendSpacedBytes(tx,tn);}uint8_t raw[256],frame[128];size_t fn=0;size_t rn=moduleObdPin(module)==15?readPin15CompensatedResponse(raw,sizeof(raw),frame,fn,sizeof(frame),900):readUntilEcuFrame(raw,sizeof(raw),frame,fn,sizeof(frame),900);lastRxHex=bytesHex(raw,rn);activity("K-line RXD levels: idle="+String(rxIdle==HIGH?"HIGH":"LOW")+", driven low="+String(rxLow==HIGH?"HIGH":"LOW")+", released="+String(rxRelease==HIGH?"HIGH":"LOW")+" (RX GPIO"+String(RX_PIN)+", TX GPIO"+String(TX_PIN)+")");logx(rn?"START RX RAW "+lastRxHex:"START RX RAW <nothing>");if(!rn||!fn){lastError="No valid StartCommunication response from "+moduleName(module);logx("START RX ECU <none>");activity("Connection failed: "+lastError+(rn?"; raw RX "+lastRxHex:"; no RX bytes"));setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START RX ECU "+bytesHex(frame,fn));const uint8_t*rp=nullptr;size_t rpn=0;if(!responsePayload(frame,fn,rp,rpn)||rpn<1||rp[0]!=0xC1){lastError="Unexpected StartCommunication response: "+bytesHex(frame,fn);logx("START response rejected; expected positive service C1");activity("Connection failed: "+lastError);setStatus("CONNECT FAILED");releaseKL();busy=false;return false;}logx("START response accepted: positive service C1 from 0x"+hex2(moduleAddr(module)));activity("StartCommunication accepted by "+moduleName(module)+": "+bytesHex(frame,fn));lastRxHex=bytesHex(frame,fn);lastGoodTrafficMs=millis();p3ReadyAtMs=millis()+cfg.p3MinMs;diagnosticSession=true;cr2Connected=(module==MOD_ENGINE);keepaliveMisses=0;if(module==MOD_EGS)readEgsIdentification();if(module==MOD_HZR||module==MOD_KI||module==MOD_EWM){livePolling=true;nextPollMs=millis()+150;lastError="";activity(moduleName(module)+" connected; verified read-only data groups available.");setStatus("CONNECTED - "+moduleName(module));busy=false;return true;}if(module==MOD_ABS){absKm20=false;absPartId="";uint8_t q[2]={0x3C,0x00},r[96];size_t n=0;const uint8_t*p=nullptr;size_t pn=0;if(sendKwpPayload(q,2,r,n,900)&&responsePayload(r,n,p,pn)&&pn>=7&&p[0]==0x7C&&p[1]==0){absPartId=bytesHex(p+2,5);absKm20=p[2]==0&&p[3]==4&&p[4]==0x46&&p[5]==0x64&&p[6]==0x89;}livePolling=true;nextPollMs=millis()+150;lastError="";activity("ABS "+absPartId+(absKm20?" KM20":" variant not mapped"));setStatus("CONNECTED - ABS LIVE DATA");busy=false;return true;}activity("Connected to "+moduleName(module)+". Live polling started.");setStatus("CONNECTED - "+moduleName(module));livePolling=true;nextPollMs=millis()+80;busy=false;return true;}
 bool connectModule(ModuleId module){
   if(!selectRelayForModule(module)){setStatus("K-LINE CHANNEL ERROR");return false;}
-  if(module==MOD_ENGINE){
-    // Try a direct CR2 StartCommunication first. Verify a real 21 12 live reply
-    // before replacing the known-good full Autel replay.
-    activity("Trying short CR2 fast-init; will fall back automatically if unsupported.");
-    bool fast=connectFastModule(MOD_ENGINE);
-    if(fast){
-      livePolling=false;
-      if(cfg.sendPostC1)sendPostC1Request(); // optional session handoff
-      const uint8_t req[]={0x21,0x12};
-      uint8_t resp[256];size_t rn=0;const uint8_t *p=nullptr;size_t pn=0;
-      if(sendKwpPayload(req,sizeof(req),resp,rn,900)
-         &&responsePayload(resp,rn,p,pn)&&pn>=3&&p[0]==0x61&&p[1]==0x12){
-        activity("Short CR2 initialization VERIFIED by successful 21 12 live-data reply.");
-        livePolling=true;nextPollMs=millis()+80;lastError="";
-        setStatus("CONNECTED - CR2 (QUICK INIT)");
-        return true;
-      }
-      activity("Short CR2 init did not pass live-data verification; using proven replay.");
-    }else activity("Short CR2 init not accepted; using proven replay.");
-    // Keep legacy replay in the source, but exclude its implementation from
-    // this build for the existing 1.25 MiB OTA partition. Short engine init
-    // has been confirmed on this vehicle by a 21 12 live-data response.
-#ifdef T1N_ENABLE_LEGACY_CR2_REPLAY
-    allRelaysOff();
-    if(!selectRelayForModule(MOD_ENGINE)){setStatus("K-LINE CHANNEL ERROR");return false;}
-    bool ok=connectCR2();
-    if(ok){activeModule=MOD_ENGINE;activeEcuAddr=0x12;requestedModule=MOD_ENGINE;livePolling=true;nextPollMs=millis()+80;}
-    else allRelaysOff();
-    return ok;
-#else
-    diagnosticSession=false;cr2Connected=false;livePolling=false;
-    releaseKL();allRelaysOff();autoReconnect=false;
-    lastError="CR2 quick initialization was not confirmed; legacy slow replay excluded from current OTA image.";
-    setStatus("CR2 INIT NOT VERIFIED");
-    return false;
-#endif
+  if(module!=MOD_ENGINE)return connectFastModule(module);
+  // Retain the vehicle-verified quick handshake and verify a real live reply.
+  bool fast=connectFastModule(MOD_ENGINE);
+  if(fast){
+    livePolling=false;
+    if(cfg.sendPostC1)sendPostC1Request();
+    const uint8_t req[]={0x21,0x12};
+    uint8_t resp[256];size_t rn=0;const uint8_t *p=nullptr;size_t pn=0;
+    if(sendKwpPayload(req,sizeof(req),resp,rn,900)
+       &&responsePayload(resp,rn,p,pn)&&pn>=3&&p[0]==0x61&&p[1]==0x12){
+      activity("CR2 initialization verified by successful 21 12 live-data reply.");
+      livePolling=true;nextPollMs=millis()+80;lastError="";
+      setStatus("CONNECTED - CR2");return true;
+    }
+    if(!lastError.length())lastError="CR2 live-data verification failed";
   }
-  bool ok=connectFastModule(module);if(!ok)allRelaysOff();return ok;
+  diagnosticSession=false;cr2Connected=false;livePolling=false;
+  releaseKL();allRelaysOff();
+  setStatus("CR2 CONNECTION FAILED - AUTOMATIC RETRY");
+  return false;
 }
 bool absPayload(uint8_t group,const uint8_t*frame,size_t fn,const uint8_t*&p,size_t&pn){if(!responsePayload(frame,fn,p,pn)||pn<3)return false;return p[0]==0x6A&&p[1]==group&&p[2]==0x00;}
 uint16_t absLE16(const uint8_t*p){return (uint16_t)p[0]|((uint16_t)p[1]<<8);}
@@ -190,7 +172,6 @@ static const EgsExtraDef egsCanDef[]={
 };
 static_assert(sizeof(egsCanDef)/sizeof(egsCanDef[0])==26,"EGS CAN field count");
 void egsCanNum(int i,uint16_t raw){setNum(egsCan[i],raw,"raw",0);}
-
 
 bool pollEGSGroup(uint8_t group,bool countFailure=true){uint8_t payload[2]={0x21,group},r[256];size_t rn=0;
   bool ok=sendKwpPayload(payload,sizeof(payload),r,rn,650);int idx=egsGroupIndex(group);

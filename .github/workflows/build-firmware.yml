@@ -2,7 +2,7 @@ name: Build ESP32 firmware
 
 on:
   push:
-    branches: [main, 'feature/autonomous-sd-monitor-20261028', 'feature/shared-sd-data-20261030']
+    branches: [main, 'feature/autonomous-sd-monitor-20261028', 'feature/shared-sd-data-20261030', 'fix/automatic-cr2-20261031']
     paths:
       - 'firmware/**'
       - 'tests/**'
