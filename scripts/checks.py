@@ -4,7 +4,7 @@ import json,pathlib,subprocess,sys,tempfile
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 def run(*args,**kw):return subprocess.run(args,cwd=ROOT,check=True,**kw)
 with tempfile.TemporaryDirectory(prefix='t1n-shared-checks-') as folder:
-    for name in ['monitor_dtc_diff','history_storage','bounded_json']:
+    for name in ['monitor_dtc_diff','history_storage','bounded_json','bounded_http']:
         binary=str(pathlib.Path(folder)/name)
         run('g++','-std=c++17','-Wall','-Wextra','-Werror','-Itests/fakes','-Ifirmware/t1n_obd','tests/'+name+'.cpp','-o',binary)
         if name=='bounded_json':

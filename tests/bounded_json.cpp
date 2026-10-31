@@ -3,7 +3,7 @@
 #include <string>
 #include "bounded_json.h"
 static std::string result;
-void sink(const char* s,size_t n,void*){assert(n<=256);result.append(s,n);}
+void sink(const char* s,size_t n,void*){assert(n<=1436);result.append(s,n);}
 int main(){
  BoundedJson json(sink);
  json.raw("{\"items\":[");

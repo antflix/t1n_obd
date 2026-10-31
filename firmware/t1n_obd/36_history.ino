@@ -364,7 +364,11 @@ void historyDataSend(uint8_t module,const String &id,const String &range){
     q.now=now?now:hLatestEpoch;q.key=historyKey(module,id.c_str());
     uint32_t span=range=="1h"?3600UL:range=="24h"?86400UL:range=="7d"?604800UL:2592000UL;
     q.after=range=="all"?0:(now>span?now-span:0);
-    for(unsigned i=0;i<3;i++)q.used[i]=hRings[i].used;
+    // Tier windows are disjoint: recent covers <=1h, quarter covers
+    // >1h through 24h, daily covers >24h. Skip files that cannot match.
+    q.used[0]=hRings[0].used;
+    q.used[1]=range=="1h"?0:hRings[1].used;
+    q.used[2]=(range=="1h"||range=="24h")?0:hRings[2].used;
   }
   q.lastRequest=millis();
   // readRaw() can serve HTTP from inside an ECU response wait. Keep that
@@ -373,8 +377,7 @@ void historyDataSend(uint8_t module,const String &id,const String &range){
     web.send(202,"application/json","{\"ok\":false,\"code\":\"HISTORY_LOADING\",\"error\":\"Reading saved SD records\",\"retryAfterMs\":250,\"points\":[]}");return;
   }
   if(q.failed){q.active=false;historyQueryError(503,"HISTORY_READ_FAILED","Cannot read microSD history journal");return;}
-  web.setContentLength(CONTENT_LENGTH_UNKNOWN);web.send(200,"application/json","");
-  BoundedJson out([](const char *data,size_t length,void*){web.sendContent(data,length);});
+  sendScannerJson([&](BoundedJson &out){
   out.raw("{\"ok\":true,\"schemaVersion\":1,\"storage\":\"microSD\",\"module\":");out.integer(module);
   out.raw(",\"id\":");out.string(id.c_str());out.raw(",\"range\":");out.string(range.c_str());
   out.raw(",\"clockValid\":");out.raw(now?"true":"false");
@@ -389,7 +392,7 @@ void historyDataSend(uint8_t module,const String &id,const String &range){
   }
   out.raw("],\"count\":");out.integer(q.count);out.raw(",\"truncated\":");out.raw(q.truncated?"true":"false");
   out.raw(",\"recording\":{\"minimumChangeSeconds\":10,\"heartbeatSeconds\":1800}}");
-  out.flush();web.sendContent("");q=HistoryQuery();
+  });q=HistoryQuery();
 }
 bool historySetClock(uint32_t seconds){
   if(seconds<1609459200UL||seconds>=4102444800UL)return false;

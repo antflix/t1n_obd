@@ -76,24 +76,21 @@ String wifiPage(){
 #include "shared_client_generated.h"
 void setupRoutes(){
 web.on("/t1n-data.js",HTTP_GET,[]{
-  web.sendHeader("Cache-Control","no-store");
-  web.send_P(200,"application/javascript; charset=utf-8",T1N_SHARED_CLIENT);
+  sendScannerBody("application/javascript; charset=utf-8",T1N_SHARED_CLIENT,sizeof(T1N_SHARED_CLIENT)-1);
 });
 web.on("/pi",HTTP_GET,[]{
   if(sdServePage("/www/pi.html"))return;
   web.send(503,"text/html; charset=utf-8","<!doctype html><meta name=viewport content=width=device-width><title>T1N display unavailable</title><h2>Pi display unavailable</h2><p>Mount the microSD card and install the matching dashboard files.</p><p><a href='/'>Open scanner</a></p><script>setTimeout(()=>location.reload(),10000)</script>");
 });
-web.on("/api/sd/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",sdStatusJson());});
+web.on("/api/sd/status",HTTP_GET,[]{sendScannerText("application/json",sdStatusJson());});
 web.on("/api/sd/test",HTTP_POST,[]{String msg;bool ok=sdTestCard(msg);web.send(ok?200:409,"text/plain",msg);});
 web.on("/api/sd/upload",HTTP_POST,sdUploadFinish,sdUploadChunk);
 web.on("/api/sd/file",HTTP_GET,sdServeAssetDownload);
 web.on("/api/monitor/status",HTTP_GET,[]{
-  web.sendHeader("Cache-Control","no-store");
-  web.send(200,"application/json",monitorStatusJson());
+  sendScannerText("application/json",monitorStatusJson());
 });
 web.on("/api/monitor/clock",HTTP_GET,[]{
-  web.sendHeader("Cache-Control","no-store");
-  web.send(200,"application/json",historyClockJson());
+  sendScannerText("application/json",historyClockJson());
 });
 web.on("/api/monitor/selftest",HTTP_POST,[]{
   String result;
@@ -110,11 +107,11 @@ web.on("/api/monitor/enable",HTTP_POST,[]{
   if(enabled!="0"&&enabled!="1"){web.send(400,"text/plain","Set enabled=0 or 1");return;}
   if(busy||jobConnect){web.send(409,"text/plain","Diagnostic link busy");return;}
   monitorSetEnabled(enabled=="1");
-  web.send(200,"application/json",monitorStatusJson());
+  sendScannerText("application/json",monitorStatusJson());
 });
-web.on("/api/hardware/lines",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",klineLogicJson());});
-web.on("/api/modules",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",modulesCatalogJson());});
-web.on("/api/module/groups",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",moduleGroupsJson());});
+web.on("/api/hardware/lines",HTTP_GET,[]{sendScannerText("application/json",klineLogicJson());});
+web.on("/api/modules",HTTP_GET,[]{sendScannerText("application/json",modulesCatalogJson());});
+web.on("/api/module/groups",HTTP_GET,[]{sendScannerText("application/json",moduleGroupsJson());});
 web.on("/api/module/read",HTTP_POST,[]{
   if(!diagnosticSession||busy||jobConnect){web.send(409,"text/plain","Connect the desired module, then stop live polling before probing.");return;}
   if(activeModule==MOD_HZR||activeModule==MOD_KI||activeModule==MOD_EWM){if(livePolling){web.send(409,"text/plain","Stop live polling before individual group requests");return;}busy=true;bool ok=false;String data=readSharedGroupByRequest(web.arg("request"),ok);busy=false;web.send(ok?200:422,"text/plain; charset=utf-8",data);return;}
@@ -126,8 +123,8 @@ web.on("/api/module/read",HTTP_POST,[]{
   busy=true;bool ok=false;String result=probeKnownModuleGroup((uint8_t)id,ok);busy=false;
   web.send(ok?200:422,"text/plain; charset=utf-8",result);
 });
-web.on("/wifi",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/html; charset=utf-8",wifiPage());});
-web.on("/api/wifi",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",wifiDiagnosticsJson());});
+web.on("/wifi",HTTP_GET,[]{sendScannerText("text/html; charset=utf-8",wifiPage());});
+web.on("/api/wifi",HTTP_GET,[]{sendScannerText("application/json",wifiDiagnosticsJson());});
 web.on("/api/wifi/scan",HTTP_GET,[]{
  // Scan results must distinguish a radio/busy error from genuinely zero networks.
  int n=WiFi.scanNetworks(false,true);
@@ -149,24 +146,22 @@ web.on("/",HTTP_GET,[]{
   if(sdServePage("/www/index.html"))return;
   web.sendHeader("Cache-Control","no-store");
 #ifdef T1N_USE_GZIP_PAGE
-  web.sendHeader("Content-Encoding","gzip");
-  web.send_P(200,"text/html; charset=utf-8",(const char*)SCANNER_UI_GZIP,SCANNER_UI_GZIP_LEN);
+    sendScannerBody("text/html; charset=utf-8",(const char*)SCANNER_UI_GZIP,SCANNER_UI_GZIP_LEN,"gzip");
 #else
-  web.send(200,"text/html; charset=utf-8",scannerPage());
+  sendScannerText("text/html; charset=utf-8",scannerPage());
 #endif
 });
 web.on("/advanced",HTTP_GET,[]{if(sdServePage("/www/advanced.html"))return;web.sendHeader("Cache-Control","no-store");
 #ifdef T1N_USE_GZIP_PAGE
-  web.sendHeader("Content-Encoding","gzip");
-  web.send_P(200,"text/html; charset=utf-8",(const char*)ADVANCED_UI_GZIP,ADVANCED_UI_GZIP_LEN);
+    sendScannerBody("text/html; charset=utf-8",(const char*)ADVANCED_UI_GZIP,ADVANCED_UI_GZIP_LEN,"gzip");
 #else
-  web.send(200,"text/html; charset=utf-8",advancedPage());
+  sendScannerText("text/html; charset=utf-8",advancedPage());
 #endif
 });
-web.on("/update",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store, no-cache, must-revalidate");web.sendHeader("Pragma","no-cache");web.send(200,"text/html; charset=utf-8",updatePage());});
-web.on("/api/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",moduleStatusJson());});
+web.on("/update",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store, no-cache, must-revalidate");web.sendHeader("Pragma","no-cache");sendScannerText("text/html; charset=utf-8",updatePage());});
+web.on("/api/status",HTTP_GET,[]{sendScannerText("application/json",moduleStatusJson());});
 web.on("/api/sensors",HTTP_GET,[]{sensorsSend();});
-web.on("/api/history/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",historyStatusJson());});
+web.on("/api/history/status",HTTP_GET,[]{sendScannerText("application/json",historyStatusJson());});
 web.on("/api/history/data",HTTP_GET,[]{
   web.sendHeader("Cache-Control","no-store");
   String module=web.arg("module");
@@ -184,13 +179,13 @@ web.on("/api/history/clock",HTTP_POST,[]{
 });
 
 web.on("/sensors",HTTP_GET,[]{sensorsSend();});
-web.on("/api/dtc",HTTP_GET,[]{web.send(200,"text/plain",dtcText);});
-web.on("/api/activity-log",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"text/plain; charset=utf-8",activityLogText);});
-web.on("/api/activity-log.txt",HTTP_GET,[]{web.sendHeader("Content-Disposition","attachment; filename=t1n_scanner_activity_log.txt");web.send(200,"text/plain; charset=utf-8",activityLogText);});
+web.on("/api/dtc",HTTP_GET,[]{sendScannerText("text/plain",dtcText);});
+web.on("/api/activity-log",HTTP_GET,[]{sendScannerText("text/plain; charset=utf-8",activityLogText);});
+web.on("/api/activity-log.txt",HTTP_GET,[]{sendScannerText("text/plain; charset=utf-8",activityLogText,"Content-Disposition: attachment; filename=t1n_scanner_activity_log.txt\r\n");});
 web.on("/api/activity-log/clear",HTTP_POST,[]{activityLogText="";activity("Activity log cleared");web.send(200,"text/plain","Cleared");});
-web.on("/api/relay/status",HTTP_GET,[]{web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",relayDiagnosticsJson());});
+web.on("/api/relay/status",HTTP_GET,[]{sendScannerText("application/json",relayDiagnosticsJson());});
 web.on("/api/relay/test",HTTP_POST,[]{if(busy||jobConnect||diagnosticSession){web.send(409,"text/plain","Disconnect scanner before manual relay testing.");return;}String a=web.arg("relay");int idx=a=="off"?-1:a.toInt()-1;String out;bool ok=manualRelayTest(idx,out);web.send(ok?200:400,"text/plain",out);});
-web.on("/api/shared-probe/targets",HTTP_GET,[]{web.send(200,"application/json",sharedProbeListJson());});
+web.on("/api/shared-probe/targets",HTTP_GET,[]{sendScannerText("application/json",sharedProbeListJson());});
 web.on("/api/shared-probe/run",HTTP_POST,[]{if(busy||jobConnect||diagnosticSession){web.send(409,"text/plain","Disconnect active scanner first");return;}if(!web.hasArg("id")){web.send(400,"text/plain","Missing target id");return;}int id=web.arg("id").toInt();if(id<0||id>=(int)(sizeof(sharedTargets)/sizeof(sharedTargets[0]))){web.send(400,"text/plain","Target not allowlisted");return;}web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",runSharedProbe((unsigned)id));});
 #ifdef T1N_ENABLE_PIN15_TIMING_LAB
 web.on("/api/shared-probe/timing",HTTP_POST,[]{if(busy||jobConnect||diagnosticSession){web.send(409,"text/plain","Disconnect scanner first");return;}int fa=web.hasArg("fall")?web.arg("fall").toInt():11;int ra=web.hasArg("rise")?web.arg("rise").toInt():75;int addr=web.hasArg("address")?strtol(web.arg("address").c_str(),nullptr,0):0x50;if((addr!=0x50&&addr!=0x69)||fa<0||fa>30||ra<0||ra>85){web.send(400,"text/plain","Invalid timing or address");return;}web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",runPin15TimingTest(fa,ra,(uint8_t)addr));});
@@ -198,7 +193,7 @@ web.on("/api/shared-probe/timing",HTTP_POST,[]{if(busy||jobConnect||diagnosticSe
 web.on("/api/module/connect",HTTP_POST,[]{if(busy||jobConnect){web.send(409,"text/plain","Scanner is busy");return;}int id=web.arg("id").toInt();if(id<0||id>5){web.send(400,"text/plain","Unknown module");return;}monitorManualOverride();autoReconnect=true;requestedModule=(ModuleId)id;activity("User requested connection to "+moduleName(requestedModule));if(diagnosticSession)disconnectCurrentModule();activeModule=requestedModule;activeEcuAddr=moduleAddr(activeModule);dtcText=activeModule==MOD_ABS?"ABS DTC read request is not verified yet.":"No DTC read yet.";setStatus("CONNECT QUEUED - "+moduleName(activeModule));jobConnect=true;web.send(202,"text/plain","Connection queued");});
 web.on("/api/hzr/fan/status",HTTP_POST,[]{if(activeModule!=MOD_HZR||!diagnosticSession||busy){web.send(409,"text/plain","Connect HVAC / HZRKL first");return;}String out;bool ok=hzrFanRead(out);web.send(ok?200:500,"text/plain",out);});
  web.on("/api/hzr/fan/on",HTTP_POST,[]{if(activeModule!=MOD_HZR||!diagnosticSession||busy){web.send(409,"text/plain","Connect HVAC / HZRKL first");return;}String out;bool ok=hzrFanStart(out);web.send(ok?200:500,"text/plain",out);});
- web.on("/api/hzr/fan/state",HTTP_GET,[]{web.send(200,"application/json",hzrFanFeedbackJson());});
+ web.on("/api/hzr/fan/state",HTTP_GET,[]{sendScannerText("application/json",hzrFanFeedbackJson());});
  web.on("/api/disconnect",HTTP_POST,[]{if(busy){web.send(409,"text/plain","Busy");return;}activity("User requested disconnect");monitorManualOverride();autoReconnect=false;reconnectAtMs=0;disconnectCurrentModule();web.send(200,"text/plain","Disconnected");});
 web.on("/api/poll/start",HTTP_POST,[]{if(!diagnosticSession){web.send(409,"text/plain","Connect the selected module first");return;}livePolling=true;nextPollMs=millis();activity("Live data polling started for "+moduleName(activeModule));web.send(200,"text/plain","Live data started");});
 web.on("/api/poll/stop",HTTP_POST,[]{livePolling=false;activity("Live data polling stopped for "+moduleName(activeModule));web.send(200,"text/plain","Live data stopped");});
@@ -207,7 +202,7 @@ web.on("/api/test",HTTP_POST,[]{if(activeModule!=MOD_ENGINE||!diagnosticSession|
 web.on("/api/test/actuator",HTTP_POST,[]{if(activeModule!=MOD_ENGINE||!diagnosticSession||busy){web.send(409,"text/plain","Connect Engine / CR2 first");return;}int id=strtol(web.arg("id").c_str(),nullptr,10);if(id!=0x11&&id!=0x12&&id!=0x1A&&id!=0x1E&&id!=0x1B){web.send(400,"text/plain","Unsupported actuator");return;}double v=web.arg("value").toDouble();activity("CR2 actuator override requested: local ID 0x"+hex2((uint8_t)id)+" = "+String(v,1)+"%");String out;bool ok=cr2TestActuator((uint8_t)id,v,out);web.send(ok?200:500,"text/plain",out);});
 web.on("/api/test/release",HTTP_POST,[]{if(activeModule!=MOD_ENGINE||!diagnosticSession||busy){web.send(409,"text/plain","Connect Engine / CR2 first");return;}int id=strtol(web.arg("id").c_str(),nullptr,10);if(id!=0x11&&id!=0x12&&id!=0x1A&&id!=0x1E&&id!=0x1B){web.send(400,"text/plain","Unsupported actuator");return;}activity("CR2 actuator release requested: local ID 0x"+hex2((uint8_t)id));String out;bool ok=cr2TestRelease((uint8_t)id,out);web.send(ok?200:500,"text/plain",out);});
 
-web.on("/status",HTTP_GET,[]{web.send(200,"application/json",statusJson());});web.on("/live",HTTP_GET,[]{web.send(200,"application/json",liveJson());});web.on("/dtc",HTTP_GET,[]{web.send(200,"text/plain",dtcText);});web.on("/log",HTTP_GET,[]{web.send(200,"text/plain",logText);});web.on("/api/raw-log.txt",HTTP_GET,[]{web.sendHeader("Content-Disposition","attachment; filename=t1n_scanner_raw_log.txt");web.send(200,"text/plain; charset=utf-8",logText);});web.on("/log/clear",HTTP_POST,[]{logText="";web.send(200,"text/plain","CLEARED");});web.on("/config",HTTP_GET,[]{web.send(200,"application/json",configJson());});
+web.on("/status",HTTP_GET,[]{sendScannerText("application/json",statusJson());});web.on("/live",HTTP_GET,[]{sendScannerText("application/json",liveJson());});web.on("/dtc",HTTP_GET,[]{sendScannerText("text/plain",dtcText);});web.on("/log",HTTP_GET,[]{sendScannerText("text/plain",logText);});web.on("/api/raw-log.txt",HTTP_GET,[]{sendScannerText("text/plain; charset=utf-8",logText,"Content-Disposition: attachment; filename=t1n_scanner_raw_log.txt\r\n");});web.on("/log/clear",HTTP_POST,[]{logText="";web.send(200,"text/plain","CLEARED");});web.on("/config",HTTP_GET,[]{sendScannerText("application/json",configJson());});
 web.on("/config/save",HTTP_POST,[]{if(busy||jobConnect){web.send(409,"text/plain","Busy");return;}allRelaysOff();ScannerConfig old=cfg;applyConfigFromWeb();String err=validateConfig();if(err.length()){cfg=old;applyPollGroups();initRelayRouting();web.send(400,"text/plain","NOT SAVED: "+err);return;}autoReconnect=false;livePolling=false;diagnosticSession=false;cr2Connected=false;releaseKL();applyPollGroups();saveScannerConfig();initRelayRouting();lastError="";activity("Transport settings saved; TLIN channel mapping is fixed");setStatus("CONFIG SAVED - DISCONNECTED");web.send(200,"text/plain","Saved");});
 web.on("/config/importlab",HTTP_POST,[]{if(busy||jobConnect){web.send(409,"text/plain","Busy");return;}importPriorLabTransport();applyPollGroups();saveScannerConfig();autoReconnect=false;livePolling=false;diagnosticSession=false;cr2Connected=false;releaseKL();setStatus("LAB TRANSPORT IMPORTED - DISCONNECTED");web.send(200,"text/plain","Imported proven lab timing");});
 web.on("/config/defaults",HTTP_POST,[]{if(busy||jobConnect){web.send(409,"text/plain","Busy");return;}allRelaysOff();cfg=ScannerConfig();importPriorLabTransport();applyPollGroups();saveScannerConfig();initRelayRouting();autoReconnect=false;livePolling=false;diagnosticSession=false;cr2Connected=false;releaseKL();lastError="";setStatus("PROVEN DEFAULTS RESTORED - DISCONNECTED");web.send(200,"text/plain","Restored scanner defaults");});

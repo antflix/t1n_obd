@@ -4,8 +4,9 @@
 #include <stdio.h>
 #include <math.h>
 
-// No heap allocation. The sink receives at most 256 bytes per call, including
+// No heap allocation. The sink receives at most 1436 bytes per call, including
 // when a sensor label contains quotes, control bytes, or non-ASCII UTF-8.
+// One configured TCP MSS avoids exhausting lwIP packet slots with tiny writes.
 class BoundedJson {
  public:
   using Sink = void (*)(const char*, size_t, void*);
@@ -28,5 +29,5 @@ class BoundedJson {
     char b[40];snprintf(b,sizeof(b),"%.8g",value);raw(b);
   }
  private:
-  Sink sink_;void* context_;char buffer_[256];size_t used_=0;
+  Sink sink_;void* context_;char buffer_[1436];size_t used_=0;
 };

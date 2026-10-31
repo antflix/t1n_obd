@@ -344,8 +344,8 @@ String engineExpected(const char*id){
   if(k.startsWith("fuelReq"))return"ECU-requested fuel quantity · operating/control-state dependent";
   return"";
 }
-String engineHealth(const char*id,const ValueState&v){
-  if(!v.valid||stale(v))return"stale";
+String engineHealth(const char*id,const ValueState&v,uint32_t snapshotMs){
+  if(!v.valid||(uint32_t)(snapshotMs-v.updatedMs)>24000)return"stale";
   String k=id;
   if(k=="coolant"){if(v.value>115)return"bad";if(v.value>105)return"warn";return"neutral";}
   if(k=="oilTemp"){if(v.value>130)return"bad";if(v.value>120)return"warn";return"neutral";}
@@ -417,15 +417,10 @@ template <typename Add> void forEachSensor(Add add){
 void historyObserveSensors(){
   forEachSensor([](const char *id,const char *,const ValueState &v){historyObserve(id,v);});
 }
-void sensorHttpSink(const char *data,size_t length,void*){web.sendContent(data,length);}
-void sensorsSend(){
-  web.sendHeader("Cache-Control","no-store");
-  web.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  web.send(200,"application/json","");
-  BoundedJson out(sensorHttpSink);
+void sensorsWrite(BoundedJson &out,uint32_t snapshotMs){
   out.raw("{\"module\":");out.string(moduleName(activeModule).c_str());
   out.raw(",\"moduleId\":");out.integer((uint8_t)activeModule);
-  out.raw(",\"uptimeMs\":");out.integer(millis());out.raw(",\"items\":[");
+  out.raw(",\"uptimeMs\":");out.integer(snapshotMs);out.raw(",\"items\":[");
   bool first=true;
   forEachSensor([&](const char *id,const char *label,const ValueState &v){
     if(!first)out.raw(",");first=false;
@@ -433,14 +428,18 @@ void sensorsSend(){
     out.raw(",\"value\":");out.string(v.text.c_str());out.raw(",\"unit\":");out.string(v.unit.c_str());
     out.raw(",\"valid\":");out.integer(v.valid?1:0);
     out.raw(",\"sampleMs\":");out.integer(v.updatedMs);
-    out.raw(",\"ageMs\":");out.integer(v.valid?(uint32_t)(millis()-v.updatedMs):0);
-    out.raw(",\"stale\":");out.integer(stale(v)?1:0);
+    out.raw(",\"ageMs\":");out.integer(v.valid?(uint32_t)(snapshotMs-v.updatedMs):0);
+    out.raw(",\"stale\":");out.integer(!v.valid||(uint32_t)(snapshotMs-v.updatedMs)>24000?1:0);
     out.raw(",\"state\":");
-    String state=activeModule==MOD_ENGINE?engineHealth(id,v):String(stale(v)?"stale":"neutral");
+    String state=activeModule==MOD_ENGINE?engineHealth(id,v,snapshotMs):String(!v.valid||(uint32_t)(snapshotMs-v.updatedMs)>24000?"stale":"neutral");
     out.string(state.c_str());out.raw(",\"expected\":");
     String expected=activeModule==MOD_ENGINE?engineExpected(id):String("");
     out.string(expected.c_str());out.raw("}");
   });
-  out.raw("]}");out.flush();web.sendContent("");
+  out.raw("]}");
 }
-String moduleStatusJson(){String s="{";s+="\"firmware\":\""+String(FIRMWARE_VERSION)+"\",";s+="\"module\":\""+jsonEscape(moduleName(activeModule))+"\",";s+="\"moduleId\":"+String((int)activeModule)+",";s+="\"address\":\"0x"+hex2(activeEcuAddr)+"\",";s+="\"obdPin\":"+String(moduleObdPin(activeModule))+",";int ri=relayIndexForModule(activeModule);s+="\"relay\":"+String(ri>=0?ri+1:0)+",";s+="\"relayGpio\":"+String(ri>=0?RX_PIN:255)+",";s+="\"connected\":"+String(diagnosticSession?1:0)+",";s+="\"polling\":"+String(livePolling?1:0)+",";s+="\"busy\":"+String(busy?1:0)+",";s+="\"status\":\""+jsonEscape(scannerStatus)+"\",";s+="\"error\":\""+jsonEscape(lastError)+"\",";s+="\"variant\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantId:activeModule==MOD_ABS?(absKm20?"ABSR_5_7_KM20":"Unknown"):"")+"\",";s+="\"variantRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantRaw:activeModule==MOD_ABS?absPartId:"")+"\",";s+="\"identRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsIdentRaw:"")+"\",";s+="\"wifi\":\""+jsonEscape(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():WiFi.softAPIP().toString())+"\"";s+="}";return s;}
+void sensorsSend(){
+  const uint32_t snapshotMs=millis();
+  sendScannerJson([&](BoundedJson &out){sensorsWrite(out,snapshotMs);});
+}
+String moduleStatusJson(){String s="{";s+="\"firmware\":\""+String(FIRMWARE_VERSION)+"\",";s+="\"loopStackMinimumBytes\":"+String(uxTaskGetStackHighWaterMark(nullptr))+",";s+="\"uptimeMs\":"+String(millis())+",\"resetReasonCode\":"+String((int)esp_reset_reason())+",\"freeHeap\":"+String(ESP.getFreeHeap())+",\"minFreeHeap\":"+String(ESP.getMinFreeHeap())+",\"maxAllocHeap\":"+String(ESP.getMaxAllocHeap())+",\"httpTimeouts\":"+String(httpMetrics.timeouts)+",\"httpFailures\":"+String(httpMetrics.failures)+",\"httpMaxSendMs\":"+String(httpMetrics.maxMs)+",";s+="\"module\":\""+jsonEscape(moduleName(activeModule))+"\",";s+="\"moduleId\":"+String((int)activeModule)+",";s+="\"address\":\"0x"+hex2(activeEcuAddr)+"\",";s+="\"obdPin\":"+String(moduleObdPin(activeModule))+",";int ri=relayIndexForModule(activeModule);s+="\"relay\":"+String(ri>=0?ri+1:0)+",";s+="\"relayGpio\":"+String(ri>=0?RX_PIN:255)+",";s+="\"connected\":"+String(diagnosticSession?1:0)+",";s+="\"polling\":"+String(livePolling?1:0)+",";s+="\"busy\":"+String(busy?1:0)+",";s+="\"status\":\""+jsonEscape(scannerStatus)+"\",";s+="\"error\":\""+jsonEscape(lastError)+"\",";s+="\"variant\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantId:activeModule==MOD_ABS?(absKm20?"ABSR_5_7_KM20":"Unknown"):"")+"\",";s+="\"variantRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsVariantRaw:activeModule==MOD_ABS?absPartId:"")+"\",";s+="\"identRaw\":\""+jsonEscape(activeModule==MOD_EGS?egsIdentRaw:"")+"\",";s+="\"wifi\":\""+jsonEscape(WiFi.status()==WL_CONNECTED?WiFi.localIP().toString():WiFi.softAPIP().toString())+"\"";s+="}";return s;}
